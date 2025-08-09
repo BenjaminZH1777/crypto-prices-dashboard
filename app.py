@@ -197,12 +197,18 @@ def api_prices():
         })
     return jsonify(response)
 
-@app.route('/manage/delete/<int:coin_db_id>', methods=['POST'])
+@app.route('/manage/delete/<int:coin_db_id>', methods=['POST', 'GET'])
 def delete_coin(coin_db_id: int):
-    coin = Coin.query.get(coin_db_id)
-    if coin:
-        db.session.delete(coin)
-        db.session.commit()
+    # Support both POST (form) and GET (direct link) to reduce 405/500 issues behind some proxies
+    try:
+        coin = Coin.query.get(coin_db_id)
+        if coin:
+            db.session.delete(coin)
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # Best-effort: log and continue redirect to manage
+        app.logger.exception("Failed to delete coin %s", coin_db_id)
     return redirect(url_for('manage'))
 
 @app.route('/api/coin_ids')
