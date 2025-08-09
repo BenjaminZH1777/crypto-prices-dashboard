@@ -40,7 +40,8 @@ def set_sqlite_pragma(dbapi_connection, connection_record):  # noqa: D401
         # Non-sqlite or failure to set pragmas; ignore
         pass
 db = SQLAlchemy(app)
-cg = CoinGeckoAPI()
+# Use a bounded network timeout to avoid worker hangs on upstream issues
+cg = CoinGeckoAPI(request_timeout=10)
 
 class Coin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
