@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 import time
+import requests
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -98,10 +99,26 @@ def fetch_market_data_for_configured_coins() -> dict:
 
 # Cache market data to respect free API limits
 _market_cache = {
-    'data': {},
-    'last_fetch_epoch': 0.0,
+    'data': {},                 # id -> market dict
+    'last_fetch_epoch': 0.0,    # last successful fetch epoch
+    'last_attempt_epoch': 0.0,  # last attempt (successful or not)
     'ids_key': '',
 }
+
+def _fetch_markets_via_requests(coin_ids: list[str], timeout_seconds: int = 10) -> list[dict]:
+    if not coin_ids:
+        return []
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        'vs_currency': 'usd',
+        'ids': ','.join(coin_ids),
+    }
+    headers = {
+        'User-Agent': 'crypto-prices-dashboard/1.0 (+https://github.com/BenjaminZH1777/crypto-prices-dashboard)'
+    }
+    resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
+    resp.raise_for_status()
+    return resp.json() or []
 
 def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
     """Return (data_dict, last_fetch_epoch, ttl) with simple in-process cache.
@@ -119,14 +136,16 @@ def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
         (now - _market_cache['last_fetch_epoch'] > ttl_seconds)
     )
     if coin_ids and should_refresh:
+        _market_cache['last_attempt_epoch'] = now
         try:
-            markets_data = cg.get_coins_markets(vs_currency='usd', ids=','.join(coin_ids))
-            _market_cache['data'] = {m['id']: m for m in (markets_data or [])}
+            # Prefer requests with explicit timeout to avoid library differences
+            markets_data = _fetch_markets_via_requests(coin_ids, timeout_seconds=10)
+        except Exception:
+            markets_data = None
+        if markets_data is not None:
+            _market_cache['data'] = {m.get('id'): m for m in (markets_data or []) if m.get('id')}
             _market_cache['last_fetch_epoch'] = now
             _market_cache['ids_key'] = ids_key
-        except Exception:
-            # Keep previous cache on failure
-            pass
     return _market_cache['data'], _market_cache['last_fetch_epoch'], ttl_seconds
 
 def resolve_coingecko_id(user_input: str) -> str:
@@ -311,40 +330,40 @@ def api_data():
     table_data = []
     for coin in coins:
         market = data_dict.get(coin.coin_id)
-        if market:
-            # Compute financing_based_price if inputs available
+        # Compute financing_based_price if inputs available
+        computed_fbp = None
+        try:
+            total_supply = (market or {}).get('total_supply')
+            found_raises = coin.found_raises
+            investor_pct = coin.investor_percentage
+            if total_supply and total_supply > 0 and found_raises and investor_pct:
+                investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
+                denom = total_supply * investor_fraction
+                if denom:
+                    computed_fbp = float(found_raises) / float(denom)
+        except Exception:
             computed_fbp = None
-            try:
-                total_supply = market.get('total_supply')
-                found_raises = coin.found_raises
-                investor_pct = coin.investor_percentage
-                if total_supply and total_supply > 0 and found_raises and investor_pct:
-                    investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
-                    denom = total_supply * investor_fraction
-                    if denom:
-                        computed_fbp = float(found_raises) / float(denom)
-            except Exception:
-                computed_fbp = None
-            table_row = {
-                'coin_name': market['name'],
-                'price': market['current_price'],
-                'current_supply': market['circulating_supply'],
-                'current_market_cap': market['market_cap'],
-                'total_supply': market['total_supply'],
-                'total_market_cap': market.get('fully_diluted_valuation', 0),
-                'last_updated': market.get('last_updated'),
-                'found_raises': coin.found_raises,
-                'investor_percentage': coin.investor_percentage,
-                'financing_valuation': coin.financing_valuation,
-                'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
-                'annualized_income': coin.annualized_income,
-                'income_valuation': coin.income_valuation,
-                'income_based_price': coin.income_based_price,
-                'tokenomics': coin.tokenomics,
-                'vesting': coin.vesting,
-                'cexs': coin.cexs,
-            }
-            table_data.append(table_row)
+
+        table_row = {
+            'coin_name': (market or {}).get('name') or coin.coin_id,
+            'price': (market or {}).get('current_price'),
+            'current_supply': (market or {}).get('circulating_supply'),
+            'current_market_cap': (market or {}).get('market_cap'),
+            'total_supply': (market or {}).get('total_supply'),
+            'total_market_cap': (market or {}).get('fully_diluted_valuation', 0),
+            'last_updated': (market or {}).get('last_updated'),
+            'found_raises': coin.found_raises,
+            'investor_percentage': coin.investor_percentage,
+            'financing_valuation': coin.financing_valuation,
+            'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
+            'annualized_income': coin.annualized_income,
+            'income_valuation': coin.income_valuation,
+            'income_based_price': coin.income_based_price,
+            'tokenomics': coin.tokenomics,
+            'vesting': coin.vesting,
+            'cexs': coin.cexs,
+        }
+        table_data.append(table_row)
     # Include cache metadata so UI can show last/next refresh
     response = {
         'rows': table_data,
