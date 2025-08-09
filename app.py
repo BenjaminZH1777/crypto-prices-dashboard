@@ -116,7 +116,7 @@ def index():
 def manage():
     error_message = None
     if request.method == 'POST':
-        coin_id = (request.form.get('coin_id') or '').strip()
+        coin_id = (request.form.get('coin_id') or '').strip().lower()
 
         def to_float(v):
             return float(v) if v not in (None, "") else None
@@ -134,12 +134,20 @@ def manage():
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
 
-        # Validate coin id against CoinGecko
+        # Validate coin id against CoinGecko.
+        # Primary: use cached id set. Fallback: direct get_coin_by_id to avoid false negatives.
         valid_ids = get_valid_coin_ids_set()
-        # Only enforce validation when we actually fetched any ids; if cg unreachable, accept input
+        is_valid = True
         if valid_ids and coin_id not in valid_ids:
-            error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
-        else:
+            try:
+                _ = cg.get_coin_by_id(coin_id)
+                # If reachable and valid, add to cache to avoid next miss
+                _coin_list_cache['ids'].add(coin_id)
+                is_valid = True
+            except Exception:
+                is_valid = False
+
+        if is_valid:
             coin = Coin.query.filter_by(coin_id=coin_id).first()
             if coin:
                 coin.buy_price = buy_price
@@ -178,6 +186,8 @@ def manage():
                 error_message = f"数据库写入失败: {e}"
             else:
                 return redirect(url_for('manage'))
+        else:
+            error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
 
     coins = Coin.query.all()
     return render_template('manage.html', coins=coins, error=error_message)
