@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from pycoingecko import CoinGeckoAPI
 import time
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coins.db'
 db = SQLAlchemy(app)
 cg = CoinGeckoAPI()
@@ -11,6 +11,9 @@ cg = CoinGeckoAPI()
 class Coin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     coin_id = db.Column(db.String(50), unique=True, nullable=False)
+    # Portfolio-related fields
+    buy_price = db.Column(db.Float)
+    amount = db.Column(db.Float)
     found_raises = db.Column(db.Float)
     investor_percentage = db.Column(db.Float)
     financing_valuation = db.Column(db.Float)
@@ -85,6 +88,8 @@ def manage():
     error_message = None
     if request.method == 'POST':
         coin_id = (request.form.get('coin_id') or '').strip()
+        buy_price = float(request.form['buy_price']) if request.form.get('buy_price') else None
+        amount = float(request.form['amount']) if request.form.get('amount') else None
         found_raises = float(request.form['found_raises']) if request.form['found_raises'] else None
         investor_percentage = float(request.form['investor_percentage']) if request.form['investor_percentage'] else None
         financing_valuation = float(request.form['financing_valuation']) if request.form['financing_valuation'] else None
@@ -103,6 +108,8 @@ def manage():
         else:
             coin = Coin.query.filter_by(coin_id=coin_id).first()
             if coin:
+                coin.buy_price = buy_price
+                coin.amount = amount
                 coin.found_raises = found_raises
                 coin.investor_percentage = investor_percentage
                 coin.financing_valuation = financing_valuation
@@ -116,6 +123,8 @@ def manage():
             else:
                 coin = Coin(
                     coin_id=coin_id,
+                    buy_price=buy_price,
+                    amount=amount,
                     found_raises=found_raises,
                     investor_percentage=investor_percentage,
                     financing_valuation=financing_valuation,
@@ -163,6 +172,30 @@ def api_data():
             }
             table_data.append(table_row)
     return jsonify(table_data)
+
+@app.route('/api/prices')
+def api_prices():
+    data_dict = fetch_market_data_for_configured_coins()
+    coins = Coin.query.all()
+    response = []
+    for coin in coins:
+        market = data_dict.get(coin.coin_id)
+        if not market:
+            continue
+        current_price = market.get('current_price')
+        buy_price = coin.buy_price or 0.0
+        amount = coin.amount or 0.0
+        profit = 0.0
+        if current_price is not None and buy_price and amount:
+            profit = (current_price - buy_price) * amount
+        response.append({
+            'name': market.get('name'),
+            'current_price': float(current_price) if current_price is not None else None,
+            'buy_price': float(buy_price) if buy_price is not None else None,
+            'amount': float(amount) if amount is not None else None,
+            'profit': float(profit),
+        })
+    return jsonify(response)
 
 @app.route('/manage/delete/<int:coin_db_id>', methods=['POST'])
 def delete_coin(coin_db_id: int):

@@ -1,94 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
+    <title>Crypto Tracker</title>
+    <script src="/static/script.js" defer></script>
     <meta charset="UTF-8">
-    <title>Crypto Table</title>
-</head>
-<body>
-    <h1>Crypto Table</h1>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background: #f5f5f5; }
+    </style>
     <div>
         <a href="/manage">管理代币</a>
     </div>
-    <table>
+    </head>
+<body>
+    <h1>我的加密资产</h1>
+    <table border="1" id="token-table">
         <thead>
             <tr>
-                <th>Coin Name</th>
-                <th>Price</th>
-                <th>Current Supply</th>
-                <th>Current Market Cap</th>
-                <th>Total Supply</th>
-                <th>Total Market Cap</th>
-                <th>Last Updated</th>
-                <th>Found Raises</th>
-                <th>Investor Percentage</th>
-                <th>Financing Valuation</th>
-                <th>Financing Based Price</th>
-                <th>Annualized Income</th>
-                <th>Income Valuation</th>
-                <th>Income Based Price</th>
-                <th>Tokenomics</th>
-                <th>Vesting</th>
-                <th>CEXs</th>
+                <th>名称</th>
+                <th>当前价格</th>
+                <th>买入价格</th>
+                <th>数量</th>
+                <th>盈亏（USD）</th>
             </tr>
         </thead>
-        <tbody id="table-body">
-            {% for row in table_data %}
-            <tr>
-                <td>{{ row.coin_name }}</td>
-                <td>{{ row.price }}</td>
-                <td>{{ row.current_supply }}</td>
-                <td>{{ row.current_market_cap }}</td>
-                <td>{{ row.total_supply }}</td>
-                <td>{{ row.total_market_cap }}</td>
-                <td>{{ row.last_updated }}</td>
-                <td>{{ row.found_raises }}</td>
-                <td>{{ row.investor_percentage }}</td>
-                <td>{{ row.financing_valuation }}</td>
-                <td>{{ row.financing_based_price }}</td>
-                <td>{{ row.annualized_income }}</td>
-                <td>{{ row.income_valuation }}</td>
-                <td>{{ row.income_based_price }}</td>
-                <td>{{ row.tokenomics }}</td>
-                <td>{{ row.vesting }}</td>
-                <td>{{ row.cexs }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+        <tbody></tbody>
     </table>
-    <script>
-        function updateTable() {
-            fetch('/api/data')
-                .then(response => response.json())
-                .then(data => {
-                    const tableBody = document.getElementById('table-body');
-                    tableBody.innerHTML = '';
-                    data.forEach(row => {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${row.coin_name}</td>
-                            <td>${row.price}</td>
-                            <td>${row.current_supply}</td>
-                            <td>${row.current_market_cap}</td>
-                            <td>${row.total_supply}</td>
-                            <td>${row.total_market_cap}</td>
-                            <td>${row.last_updated || ''}</td>
-                            <td>${row.found_raises}</td>
-                            <td>${row.investor_percentage}</td>
-                            <td>${row.financing_valuation}</td>
-                            <td>${row.financing_based_price}</td>
-                            <td>${row.annualized_income}</td>
-                            <td>${row.income_valuation}</td>
-                            <td>${row.income_based_price}</td>
-                            <td>${row.tokenomics}</td>
-                            <td>${row.vesting}</td>
-                            <td>${row.cexs}</td>
-                        `;
-                        tableBody.appendChild(tr);
-                    });
-                });
-        }
-        updateTable();
-        setInterval(updateTable, 60000); // 每1分钟更新
-    </script>
 </body>
 </html>
