@@ -227,6 +227,60 @@ def manage():
     coins = Coin.query.all()
     return render_template('manage.html', coins=coins, error=error_message)
 
+@app.route('/manage/edit/<int:coin_db_id>', methods=['GET', 'POST'])
+def edit_coin(coin_db_id: int):
+    coin = db.session.get(Coin, coin_db_id)
+    if not coin:
+        return redirect(url_for('manage'))
+
+    error_message = None
+    if request.method == 'POST':
+        new_coin_id = (request.form.get('coin_id') or '').strip()
+
+        def to_float(v):
+            return float(v) if v not in (None, "") else None
+
+        buy_price = to_float(request.form.get('buy_price'))
+        amount = to_float(request.form.get('amount'))
+        found_raises = to_float(request.form.get('found_raises'))
+        investor_percentage = to_float(request.form.get('investor_percentage'))
+        financing_valuation = to_float(request.form.get('financing_valuation'))
+        financing_based_price = to_float(request.form.get('financing_based_price'))
+        annualized_income = to_float(request.form.get('annualized_income'))
+        income_valuation = to_float(request.form.get('income_valuation'))
+        income_based_price = to_float(request.form.get('income_based_price'))
+        tokenomics = request.form.get('tokenomics', '')
+        vesting = request.form.get('vesting', '')
+        cexs = request.form.get('cexs', '')
+
+        resolved_id = resolve_coingecko_id(new_coin_id)
+        valid_ids = get_valid_coin_ids_set()
+        if valid_ids and resolved_id not in valid_ids:
+            error_message = f"无效的 CoinGecko 代币ID: {new_coin_id}"
+        else:
+            coin.coin_id = resolved_id
+            coin.buy_price = buy_price
+            coin.amount = amount
+            coin.found_raises = found_raises
+            coin.investor_percentage = investor_percentage
+            coin.financing_valuation = financing_valuation
+            coin.financing_based_price = financing_based_price
+            coin.annualized_income = annualized_income
+            coin.income_valuation = income_valuation
+            coin.income_based_price = income_based_price
+            coin.tokenomics = tokenomics
+            coin.vesting = vesting
+            coin.cexs = cexs
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                error_message = f"数据库写入失败: {e}"
+            else:
+                return redirect(url_for('manage'))
+
+    return render_template('edit.html', coin=coin, error=error_message)
+
 @app.route('/api/data')
 def api_data():
     data_dict = fetch_market_data_for_configured_coins()

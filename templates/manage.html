@@ -75,9 +75,12 @@
                 <td>{{ coin.vesting }}</td>
                 <td>{{ coin.cexs }}</td>
                 <td>
-                    <form method="POST" action="/manage/delete/{{ coin.id }}" onsubmit="return confirm('删除该代币？');">
-                        <button type="submit">Delete</button>
-                    </form>
+                    <div style="display:flex; gap:6px;">
+                        <a href="/manage/edit/{{ coin.id }}" style="padding:4px 8px;border:1px solid #888;border-radius:4px;text-decoration:none;">Edit</a>
+                        <form method="POST" action="/manage/delete/{{ coin.id }}" onsubmit="return confirm('删除该代币？');">
+                            <button type="submit">Delete</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% endfor %}

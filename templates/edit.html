@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Coin</title>
+</head>
+<body>
+    <h1>Edit Coin</h1>
+    <p><a href="/manage" style="display:inline-block;padding:6px 10px;border:1px solid #ccc;border-radius:4px;text-decoration:none;">Back to Manage</a></p>
+    {% if error %}
+    <div style="color:red;">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+        <label for="coin_id">CoinGecko Coin ID:</label>
+        <input type="text" name="coin_id" id="coin_id" value="{{ coin.coin_id }}" required>
+        <br>
+        <label for="buy_price">买入价格 (USD):</label>
+        <input type="number" name="buy_price" step="0.00000001" value="{{ coin.buy_price }}"><br>
+        <label for="amount">数量:</label>
+        <input type="number" name="amount" step="0.00000001" value="{{ coin.amount }}"><br>
+        <hr>
+        <label for="found_raises">Found Raises:</label>
+        <input type="number" name="found_raises" step="0.01" value="{{ coin.found_raises }}"><br>
+        <label for="investor_percentage">Investor Percentage:</label>
+        <input type="number" name="investor_percentage" step="0.01" value="{{ coin.investor_percentage }}"><br>
+        <label for="financing_valuation">Financing Valuation:</label>
+        <input type="number" name="financing_valuation" step="0.01" value="{{ coin.financing_valuation }}"><br>
+        <label for="financing_based_price">Financing Based Price:</label>
+        <input type="number" name="financing_based_price" step="0.01" value="{{ coin.financing_based_price }}"><br>
+        <label for="annualized_income">Annualized Income:</label>
+        <input type="number" name="annualized_income" step="0.01" value="{{ coin.annualized_income }}"><br>
+        <label for="income_valuation">Income Valuation:</label>
+        <input type="number" name="income_valuation" step="0.01" value="{{ coin.income_valuation }}"><br>
+        <label for="income_based_price">Income Based Price:</label>
+        <input type="number" name="income_based_price" step="0.01" value="{{ coin.income_based_price }}"><br>
+        <label for="tokenomics">Tokenomics:</label>
+        <textarea name="tokenomics">{{ coin.tokenomics }}</textarea><br>
+        <label for="vesting">Vesting:</label>
+        <textarea name="vesting">{{ coin.vesting }}</textarea><br>
+        <label for="cexs">CEXs:</label>
+        <textarea name="cexs">{{ coin.cexs }}</textarea><br>
+        <input type="submit" value="Save Changes">
+    </form>
+</body>
+</html>
+
