@@ -40,6 +40,8 @@
         <textarea name="vesting"></textarea><br>
         <label for="cexs">CEXs:</label>
         <textarea name="cexs"></textarea><br>
+        <label for="tags">Tags:</label>
+        <textarea name="tags" placeholder="comma separated tags"></textarea><br>
         <input type="submit" value="Save">
     </form>
     <h2>Current Coins</h2>
@@ -57,6 +59,7 @@
                 <th>Tokenomics</th>
                 <th>Vesting</th>
                 <th>CEXs</th>
+                <th>Tags</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -74,6 +77,7 @@
                 <td>{{ coin.tokenomics }}</td>
                 <td>{{ coin.vesting }}</td>
                 <td>{{ coin.cexs }}</td>
+                <td>{{ coin.tags }}</td>
                 <td>
                     <div style="display:flex; gap:6px;">
                         <a href="/manage/edit/{{ coin.id }}" style="padding:4px 8px;border:1px solid #888;border-radius:4px;text-decoration:none;">Edit</a>

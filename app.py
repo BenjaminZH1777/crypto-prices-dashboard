@@ -68,6 +68,7 @@ class Coin(db.Model):
     tokenomics = db.Column(db.Text)
     vesting = db.Column(db.Text)
     cexs = db.Column(db.Text)
+    tags = db.Column(db.Text)
 
 _coin_list_cache = {
     'ids': set(),
@@ -112,6 +113,7 @@ def _fetch_markets_via_requests(coin_ids: list[str], timeout_seconds: int = 10) 
     params = {
         'vs_currency': 'usd',
         'ids': ','.join(coin_ids),
+        'price_change_percentage': '24h,7d',
     }
     headers = {
         'User-Agent': 'crypto-prices-dashboard/1.0 (+https://github.com/BenjaminZH1777/crypto-prices-dashboard)'
@@ -217,6 +219,7 @@ def manage():
         tokenomics = request.form.get('tokenomics', '')
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
+        tags = request.form.get('tags', '')
 
         # Try to resolve friendly inputs (e.g., names/symbols) to a real CoinGecko id
         resolved_id = resolve_coingecko_id(coin_id)
@@ -241,6 +244,7 @@ def manage():
                 coin.tokenomics = tokenomics
                 coin.vesting = vesting
                 coin.cexs = cexs
+                coin.tags = tags
             else:
                 coin = Coin(
                     coin_id=resolved_id,
@@ -255,7 +259,8 @@ def manage():
                     income_based_price=income_based_price,
                     tokenomics=tokenomics,
                     vesting=vesting,
-                    cexs=cexs
+                    cexs=cexs,
+                    tags=tags
                 )
                 db.session.add(coin)
             try:
@@ -294,6 +299,7 @@ def edit_coin(coin_db_id: int):
         tokenomics = request.form.get('tokenomics', '')
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
+        tags = request.form.get('tags', '')
 
         resolved_id = resolve_coingecko_id(new_coin_id)
         valid_ids = get_valid_coin_ids_set()
@@ -313,6 +319,7 @@ def edit_coin(coin_db_id: int):
             coin.tokenomics = tokenomics
             coin.vesting = vesting
             coin.cexs = cexs
+            coin.tags = tags
             try:
                 db.session.commit()
             except Exception as e:
@@ -345,6 +352,7 @@ def api_data():
             computed_fbp = None
 
         table_row = {
+            'coin_id': coin.coin_id,
             'coin_name': (market or {}).get('name') or coin.coin_id,
             'price': (market or {}).get('current_price'),
             'current_supply': (market or {}).get('circulating_supply'),
@@ -352,6 +360,8 @@ def api_data():
             'total_supply': (market or {}).get('total_supply'),
             'total_market_cap': (market or {}).get('fully_diluted_valuation', 0),
             'last_updated': (market or {}).get('last_updated'),
+            'pct_24h': (market or {}).get('price_change_percentage_24h_in_currency', (market or {}).get('price_change_percentage_24h')),
+            'pct_7d': (market or {}).get('price_change_percentage_7d_in_currency'),
             'found_raises': coin.found_raises,
             'investor_percentage': coin.investor_percentage,
             'financing_valuation': coin.financing_valuation,
@@ -362,6 +372,7 @@ def api_data():
             'tokenomics': coin.tokenomics,
             'vesting': coin.vesting,
             'cexs': coin.cexs,
+            'tags': coin.tags,
         }
         table_data.append(table_row)
     # Include cache metadata so UI can show last/next refresh
@@ -423,6 +434,16 @@ def inject_version():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        # lightweight migration for new columns
+        try:
+            from sqlalchemy import text
+            cols = db.session.execute(text("PRAGMA table_info(coin)")).fetchall()
+            names = {c[1] for c in cols}
+            if 'tags' not in names:
+                db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
         # Seed with a few popular coins if database is empty
         if Coin.query.count() == 0:
             for coin_id in ['bitcoin', 'ethereum', 'solana']:

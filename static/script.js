@@ -55,8 +55,10 @@ async function loadPrices() {
         var row = document.createElement('tr');
         row.innerHTML = `
             <td>${idx + 1}</td>
-            <td>${orElse(r.coin_name, '-')}</td>
-            <td>${(r.price != null && !isNaN(r.price)) ? ('$' + Number(r.price).toFixed(6)) : '-'}</td>
+            <td><a href="https://www.coingecko.com/en/coins/${encodeURIComponent(r.coin_id || '')}" target="_blank" rel="noopener">${orElse(r.coin_name, '-')}</a></td>
+            <td style="background:#e6fff2;">${(r.price != null && !isNaN(r.price)) ? ('$' + Number(r.price).toFixed(6)) : '-'}</td>
+            <td>${(r.pct_24h != null && !isNaN(r.pct_24h)) ? (Number(r.pct_24h).toFixed(2)+'%') : ''}</td>
+            <td>${(r.pct_7d != null && !isNaN(r.pct_7d)) ? (Number(r.pct_7d).toFixed(2)+'%') : ''}</td>
             <td>${fmtNumber(r.current_supply)}</td>
             <td>${fmtMoney(r.current_market_cap)}</td>
             <td>${fmtNumber(r.total_supply)}</td>
@@ -64,13 +66,14 @@ async function loadPrices() {
             <td>${fmtMoney(r.found_raises)}</td>
             <td>${fmtPercent(r.investor_percentage)}</td>
             <td>${fmtMoney(r.financing_valuation)}</td>
-            <td>${fmtMoney(r.financing_based_price)}</td>
+            <td style="background:#e6fff2;">${fmtMoney(r.financing_based_price)}</td>
             <td>${fmtMoney(r.annualized_income)}</td>
             <td>${fmtMoney(r.income_valuation)}</td>
-            <td>${fmtMoney(r.income_based_price)}</td>
+            <td style="background:#e6fff2;">${fmtMoney(r.income_based_price)}</td>
             <td>${orElse(r.tokenomics, '')}</td>
             <td>${orElse(r.vesting, '')}</td>
             <td>${orElse(r.cexs, '')}</td>
+            <td>${orElse(r.tags, '')}</td>
         `;
         tbody.appendChild(row);
     });
