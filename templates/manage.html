@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Coins</title>
+</head>
+<body>
+    <h1>Manage Coins</h1>
+    {% if error %}
+    <div style="color:red;">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+        <label for="coin_id">CoinGecko Coin ID:</label>
+        <input type="text" name="coin_id" id="coin_id" placeholder="e.g. bitcoin" required>
+        <small>常见ID示例：<span id="popular-ids">loading...</span></small>
+        <br>
+        <label for="found_raises">Found Raises:</label>
+        <input type="number" name="found_raises" step="0.01"><br>
+        <label for="investor_percentage">Investor Percentage:</label>
+        <input type="number" name="investor_percentage" step="0.01"><br>
+        <label for="financing_valuation">Financing Valuation:</label>
+        <input type="number" name="financing_valuation" step="0.01"><br>
+        <label for="financing_based_price">Financing Based Price:</label>
+        <input type="number" name="financing_based_price" step="0.01"><br>
+        <label for="annualized_income">Annualized Income:</label>
+        <input type="number" name="annualized_income" step="0.01"><br>
+        <label for="income_valuation">Income Valuation:</label>
+        <input type="number" name="income_valuation" step="0.01"><br>
+        <label for="income_based_price">Income Based Price:</label>
+        <input type="number" name="income_based_price" step="0.01"><br>
+        <label for="tokenomics">Tokenomics:</label>
+        <textarea name="tokenomics"></textarea><br>
+        <label for="vesting">Vesting:</label>
+        <textarea name="vesting"></textarea><br>
+        <label for="cexs">CEXs:</label>
+        <textarea name="cexs"></textarea><br>
+        <input type="submit" value="Save">
+    </form>
+    <h2>Current Coins</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Coin ID</th>
+                <th>Found Raises</th>
+                <th>Investor Percentage</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for coin in coins %}
+            <tr>
+                <td>{{ coin.coin_id }}</td>
+                <td>{{ coin.found_raises }}</td>
+                <td>{{ coin.investor_percentage }}</td>
+                <td>
+                    <form method="POST" action="/manage/delete/{{ coin.id }}" onsubmit="return confirm('删除该代币？');">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <script>
+        fetch('/api/coin_ids')
+            .then(r => r.json())
+            .then(ids => {
+                document.getElementById('popular-ids').textContent = ids.join(', ');
+            })
+            .catch(() => {
+                document.getElementById('popular-ids').textContent = 'bitcoin, ethereum, solana';
+            });
+    </script>
+</body>
+</html>
