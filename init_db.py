@@ -1,5 +1,5 @@
 from app import app, db, Coin
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 
 def initialize_database() -> None:
@@ -17,13 +17,13 @@ def initialize_database() -> None:
         # Naive migration via ALTER TABLE if not exists
         if 'buy_price' not in cols:
             try:
-                db.session.execute(db.text('ALTER TABLE coin ADD COLUMN buy_price FLOAT'))
+                db.session.execute(text('ALTER TABLE coin ADD COLUMN buy_price FLOAT'))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
         if 'amount' not in cols:
             try:
-                db.session.execute(db.text('ALTER TABLE coin ADD COLUMN amount FLOAT'))
+                db.session.execute(text('ALTER TABLE coin ADD COLUMN amount FLOAT'))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
