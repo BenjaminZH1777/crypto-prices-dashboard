@@ -212,10 +212,11 @@ def api_coin_ids():
     return jsonify(popular)
 
 if __name__ == '__main__':
-    db.create_all()
-    # Seed with a few popular coins if database is empty
-    if Coin.query.count() == 0:
-        for coin_id in ['bitcoin', 'ethereum', 'solana']:
-            db.session.add(Coin(coin_id=coin_id))
-        db.session.commit()
+    with app.app_context():
+        db.create_all()
+        # Seed with a few popular coins if database is empty
+        if Coin.query.count() == 0:
+            for coin_id in ['bitcoin', 'ethereum', 'solana']:
+                db.session.add(Coin(coin_id=coin_id))
+            db.session.commit()
     app.run(debug=True)

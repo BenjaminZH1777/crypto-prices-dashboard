@@ -1,23 +1,31 @@
 async function loadPrices() {
-    const res = await fetch('/api/prices');
-    const tokens = await res.json();
+    // 使用统一的数据接口，包含 CoinGecko 字段和手动填写字段
+    const res = await fetch('/api/data');
+    const rows = await res.json();
 
-    const tbody = document.querySelector("#token-table tbody");
-    tbody.innerHTML = "";
+    const tbody = document.querySelector('#token-table tbody');
+    tbody.innerHTML = '';
 
-    tokens.forEach(token => {
-        const row = document.createElement("tr");
-        const currentPrice = token.current_price != null ? token.current_price.toFixed(6) : '-';
-        const buyPrice = token.buy_price != null ? token.buy_price : '-';
-        const amount = token.amount != null ? token.amount : '-';
-        const profitStr = token.profit != null ? token.profit.toFixed(2) : '0.00';
-        const color = token.profit >= 0 ? 'green' : 'red';
+    rows.forEach((r, idx) => {
+        const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${token.name}</td>
-            <td>$${currentPrice}</td>
-            <td>$${buyPrice}</td>
-            <td>${amount}</td>
-            <td style="color:${color};">$${profitStr}</td>
+            <td>${idx + 1}</td>
+            <td>${r.coin_name ?? '-'}</td>
+            <td>${r.price != null ? ('$' + Number(r.price).toFixed(6)) : '-'}</td>
+            <td>${r.current_supply != null ? Number(r.current_supply).toLocaleString() : '-'}</td>
+            <td>${r.current_market_cap != null ? ('$' + Number(r.current_market_cap).toLocaleString()) : '-'}</td>
+            <td>${r.total_supply != null ? Number(r.total_supply).toLocaleString() : '-'}</td>
+            <td>${r.total_market_cap != null ? ('$' + Number(r.total_market_cap).toLocaleString()) : '-'}</td>
+            <td>${r.found_raises ?? ''}</td>
+            <td>${r.investor_percentage ?? ''}</td>
+            <td>${r.financing_valuation ?? ''}</td>
+            <td>${r.financing_based_price ?? ''}</td>
+            <td>${r.annualized_income ?? ''}</td>
+            <td>${r.income_valuation ?? ''}</td>
+            <td>${r.income_based_price ?? ''}</td>
+            <td>${r.tokenomics ?? ''}</td>
+            <td>${r.vesting ?? ''}</td>
+            <td>${r.cexs ?? ''}</td>
         `;
         tbody.appendChild(row);
     });

@@ -6,6 +6,7 @@
 </head>
 <body>
     <h1>Manage Coins</h1>
+    <p><a href="/" style="display:inline-block;padding:6px 10px;border:1px solid #ccc;border-radius:4px;text-decoration:none;">Back to Home</a></p>
     {% if error %}
     <div style="color:red;">{{ error }}</div>
     {% endif %}
@@ -42,14 +43,20 @@
         <input type="submit" value="Save">
     </form>
     <h2>Current Coins</h2>
-    <table>
+    <table border="1">
         <thead>
             <tr>
                 <th>Coin ID</th>
-                <th>Buy Price</th>
-                <th>Amount</th>
                 <th>Found Raises</th>
                 <th>Investor Percentage</th>
+                <th>Financing Valuation</th>
+                <th>Financing Based Price</th>
+                <th>Annualized Income</th>
+                <th>Income Valuation</th>
+                <th>Income Based Price</th>
+                <th>Tokenomics</th>
+                <th>Vesting</th>
+                <th>CEXs</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -57,10 +64,16 @@
             {% for coin in coins %}
             <tr>
                 <td>{{ coin.coin_id }}</td>
-                <td>{{ coin.buy_price }}</td>
-                <td>{{ coin.amount }}</td>
                 <td>{{ coin.found_raises }}</td>
                 <td>{{ coin.investor_percentage }}</td>
+                <td>{{ coin.financing_valuation }}</td>
+                <td>{{ coin.financing_based_price }}</td>
+                <td>{{ coin.annualized_income }}</td>
+                <td>{{ coin.income_valuation }}</td>
+                <td>{{ coin.income_based_price }}</td>
+                <td>{{ coin.tokenomics }}</td>
+                <td>{{ coin.vesting }}</td>
+                <td>{{ coin.cexs }}</td>
                 <td>
                     <form method="POST" action="/manage/delete/{{ coin.id }}" onsubmit="return confirm('删除该代币？');">
                         <button type="submit">Delete</button>
