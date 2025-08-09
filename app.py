@@ -165,47 +165,9 @@ def resolve_coingecko_id(user_input: str) -> str:
 
 @app.route('/')
 def index():
-    data_dict, _, _ = get_cached_market_data(ttl_seconds=300)
-    coins = Coin.query.all()
-    table_data = []
-    for coin in coins:
-        market = data_dict.get(coin.coin_id)
-        if market:
-            # Compute financing_based_price if inputs available
-            computed_fbp = None
-            try:
-                total_supply = market.get('total_supply')
-                found_raises = coin.found_raises
-                investor_pct = coin.investor_percentage
-                if total_supply and total_supply > 0 and found_raises and investor_pct:
-                    # Accept both 0-1 (fraction) and 0-100 (percent) inputs
-                    investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
-                    denom = total_supply * investor_fraction
-                    if denom:
-                        computed_fbp = float(found_raises) / float(denom)
-            except Exception:
-                computed_fbp = None
-            table_row = {
-                'coin_name': market['name'],
-                'price': market['current_price'],
-                'current_supply': market['circulating_supply'],
-                'current_market_cap': market['market_cap'],
-                'total_supply': market['total_supply'],
-                'total_market_cap': market.get('fully_diluted_valuation', 0),
-                'last_updated': market.get('last_updated'),
-                'found_raises': coin.found_raises,
-                'investor_percentage': coin.investor_percentage,
-                'financing_valuation': coin.financing_valuation,
-                'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
-                'annualized_income': coin.annualized_income,
-                'income_valuation': coin.income_valuation,
-                'income_based_price': coin.income_based_price,
-                'tokenomics': coin.tokenomics,
-                'vesting': coin.vesting,
-                'cexs': coin.cexs,
-            }
-            table_data.append(table_row)
-    return render_template('index.html', table_data=table_data)
+    # Keep homepage rendering lightweight to avoid upstream-induced 502s.
+    # Data is loaded client-side via /api/data with caching and timeouts.
+    return render_template('index.html')
 
 @app.route('/manage', methods=['GET', 'POST'])
 def manage():
