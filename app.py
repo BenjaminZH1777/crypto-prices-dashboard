@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from pycoingecko import CoinGeckoAPI
 from pathlib import Path
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 import time
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -13,6 +15,25 @@ DB_DIR.mkdir(exist_ok=True)
 DB_PATH = DB_DIR / 'coins.db'
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'connect_args': {
+        'check_same_thread': False,
+        'timeout': 30,
+    }
+}
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):  # noqa: D401
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+        cursor.execute("PRAGMA busy_timeout=30000;")
+        cursor.close()
+    except Exception:
+        # Non-sqlite or failure to set pragmas; ignore
+        pass
 db = SQLAlchemy(app)
 cg = CoinGeckoAPI()
 
@@ -96,22 +117,27 @@ def manage():
     error_message = None
     if request.method == 'POST':
         coin_id = (request.form.get('coin_id') or '').strip()
-        buy_price = float(request.form['buy_price']) if request.form.get('buy_price') else None
-        amount = float(request.form['amount']) if request.form.get('amount') else None
-        found_raises = float(request.form['found_raises']) if request.form['found_raises'] else None
-        investor_percentage = float(request.form['investor_percentage']) if request.form['investor_percentage'] else None
-        financing_valuation = float(request.form['financing_valuation']) if request.form['financing_valuation'] else None
-        financing_based_price = float(request.form['financing_based_price']) if request.form['financing_based_price'] else None
-        annualized_income = float(request.form['annualized_income']) if request.form['annualized_income'] else None
-        income_valuation = float(request.form['income_valuation']) if request.form['income_valuation'] else None
-        income_based_price = float(request.form['income_based_price']) if request.form['income_based_price'] else None
-        tokenomics = request.form['tokenomics']
-        vesting = request.form['vesting']
-        cexs = request.form['cexs']
+
+        def to_float(v):
+            return float(v) if v not in (None, "") else None
+
+        buy_price = to_float(request.form.get('buy_price'))
+        amount = to_float(request.form.get('amount'))
+        found_raises = to_float(request.form.get('found_raises'))
+        investor_percentage = to_float(request.form.get('investor_percentage'))
+        financing_valuation = to_float(request.form.get('financing_valuation'))
+        financing_based_price = to_float(request.form.get('financing_based_price'))
+        annualized_income = to_float(request.form.get('annualized_income'))
+        income_valuation = to_float(request.form.get('income_valuation'))
+        income_based_price = to_float(request.form.get('income_based_price'))
+        tokenomics = request.form.get('tokenomics', '')
+        vesting = request.form.get('vesting', '')
+        cexs = request.form.get('cexs', '')
 
         # Validate coin id against CoinGecko
         valid_ids = get_valid_coin_ids_set()
-        if coin_id not in valid_ids:
+        # Only enforce validation when we actually fetched any ids; if cg unreachable, accept input
+        if valid_ids and coin_id not in valid_ids:
             error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
         else:
             coin = Coin.query.filter_by(coin_id=coin_id).first()
@@ -145,8 +171,13 @@ def manage():
                     cexs=cexs
                 )
                 db.session.add(coin)
-            db.session.commit()
-            return redirect(url_for('manage'))
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                error_message = f"数据库写入失败: {e}"
+            else:
+                return redirect(url_for('manage'))
 
     coins = Coin.query.all()
     return render_template('manage.html', coins=coins, error=error_message)
@@ -209,7 +240,7 @@ def api_prices():
 def delete_coin(coin_db_id: int):
     # Support both POST (form) and GET (direct link) to reduce 405/500 issues behind some proxies
     try:
-        coin = Coin.query.get(coin_db_id)
+        coin = db.session.get(Coin, coin_db_id)
         if coin:
             db.session.delete(coin)
             db.session.commit()
