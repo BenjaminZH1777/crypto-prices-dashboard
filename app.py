@@ -132,6 +132,20 @@ def index():
     for coin in coins:
         market = data_dict.get(coin.coin_id)
         if market:
+            # Compute financing_based_price if inputs available
+            computed_fbp = None
+            try:
+                total_supply = market.get('total_supply')
+                found_raises = coin.found_raises
+                investor_pct = coin.investor_percentage
+                if total_supply and total_supply > 0 and found_raises and investor_pct:
+                    # Accept both 0-1 (fraction) and 0-100 (percent) inputs
+                    investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
+                    denom = total_supply * investor_fraction
+                    if denom:
+                        computed_fbp = float(found_raises) / float(denom)
+            except Exception:
+                computed_fbp = None
             table_row = {
                 'coin_name': market['name'],
                 'price': market['current_price'],
@@ -143,7 +157,7 @@ def index():
                 'found_raises': coin.found_raises,
                 'investor_percentage': coin.investor_percentage,
                 'financing_valuation': coin.financing_valuation,
-                'financing_based_price': coin.financing_based_price,
+                'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
                 'annualized_income': coin.annualized_income,
                 'income_valuation': coin.income_valuation,
                 'income_based_price': coin.income_based_price,
@@ -289,6 +303,19 @@ def api_data():
     for coin in coins:
         market = data_dict.get(coin.coin_id)
         if market:
+            # Compute financing_based_price if inputs available
+            computed_fbp = None
+            try:
+                total_supply = market.get('total_supply')
+                found_raises = coin.found_raises
+                investor_pct = coin.investor_percentage
+                if total_supply and total_supply > 0 and found_raises and investor_pct:
+                    investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
+                    denom = total_supply * investor_fraction
+                    if denom:
+                        computed_fbp = float(found_raises) / float(denom)
+            except Exception:
+                computed_fbp = None
             table_row = {
                 'coin_name': market['name'],
                 'price': market['current_price'],
@@ -300,7 +327,7 @@ def api_data():
                 'found_raises': coin.found_raises,
                 'investor_percentage': coin.investor_percentage,
                 'financing_valuation': coin.financing_valuation,
-                'financing_based_price': coin.financing_based_price,
+                'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
                 'annualized_income': coin.annualized_income,
                 'income_valuation': coin.income_valuation,
                 'income_based_price': coin.income_based_price,
