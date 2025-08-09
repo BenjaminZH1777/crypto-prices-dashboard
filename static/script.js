@@ -63,7 +63,7 @@ async function loadPrices() {
             <td>${fmtMoney(r.current_market_cap)}</td>
             <td>${fmtNumber(r.total_supply)}</td>
             <td>${fmtMoney(r.total_market_cap)}</td>
-            <td>${fmtMoney(r.found_raises)}</td>
+            <td><a href="https://cryptorank.io/ico/${encodeURIComponent(r.coin_id || '')}" target="_blank" rel="noopener">${fmtMoney(r.found_raises)}</a></td>
             <td>${fmtPercent(r.investor_percentage)}</td>
             <td>${fmtMoney(r.financing_valuation)}</td>
             <td style="background:#e6fff2;">${fmtMoney(r.financing_based_price)}</td>
