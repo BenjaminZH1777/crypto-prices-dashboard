@@ -82,6 +82,48 @@ def fetch_market_data_for_configured_coins() -> dict:
         markets_data = []
     return {market['id']: market for market in markets_data}
 
+def resolve_coingecko_id(user_input: str) -> str:
+    """Resolve user-entered text to a CoinGecko API coin id.
+
+    - If the input already matches a known id, return it as-is.
+    - Otherwise query CoinGecko search endpoint and return the first result id.
+    - On any failure, return the original input.
+    """
+    entered = (user_input or "").strip()
+    if not entered:
+        return entered
+
+    # Quick accept if we already know it's valid
+    valid_ids = get_valid_coin_ids_set()
+    if valid_ids and entered in valid_ids:
+        return entered
+
+    # Try search to map names/symbols/slugs like "spark" -> "spark-2"
+    try:
+        search = cg.search(entered)
+        coins = (search or {}).get('coins') or []
+        if coins:
+            # Prefer exact id match (case-insensitive), then by name, then symbol
+            lower_entered = entered.lower()
+            exact_id = next((c for c in coins if c.get('id','').lower() == lower_entered), None)
+            if exact_id:
+                return exact_id.get('id', entered)
+
+            exact_name = next((c for c in coins if (c.get('name') or '').lower() == lower_entered), None)
+            if exact_name:
+                return exact_name.get('id', entered)
+
+            exact_symbol = next((c for c in coins if (c.get('symbol') or '').lower() == lower_entered), None)
+            if exact_symbol:
+                return exact_symbol.get('id', entered)
+
+            # Fallback to the top-ranked search result
+            return coins[0].get('id', entered)
+    except Exception:
+        # Network or API error; keep original
+        pass
+    return entered
+
 @app.route('/')
 def index():
     data_dict = fetch_market_data_for_configured_coins()
@@ -116,7 +158,7 @@ def index():
 def manage():
     error_message = None
     if request.method == 'POST':
-        coin_id = (request.form.get('coin_id') or '').strip().lower()
+        coin_id = (request.form.get('coin_id') or '').strip()
 
         def to_float(v):
             return float(v) if v not in (None, "") else None
@@ -134,20 +176,15 @@ def manage():
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
 
-        # Validate coin id against CoinGecko.
-        # Primary: use cached id set. Fallback: direct get_coin_by_id to avoid false negatives.
-        valid_ids = get_valid_coin_ids_set()
-        is_valid = True
-        if valid_ids and coin_id not in valid_ids:
-            try:
-                _ = cg.get_coin_by_id(coin_id)
-                # If reachable and valid, add to cache to avoid next miss
-                _coin_list_cache['ids'].add(coin_id)
-                is_valid = True
-            except Exception:
-                is_valid = False
+        # Try to resolve friendly inputs (e.g., names/symbols) to a real CoinGecko id
+        resolved_id = resolve_coingecko_id(coin_id)
 
-        if is_valid:
+        # Validate coin id against CoinGecko
+        valid_ids = get_valid_coin_ids_set()
+        # Only enforce validation when we actually fetched any ids; if cg unreachable, accept input
+        if valid_ids and resolved_id not in valid_ids:
+            error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
+        else:
             coin = Coin.query.filter_by(coin_id=coin_id).first()
             if coin:
                 coin.buy_price = buy_price
@@ -164,7 +201,7 @@ def manage():
                 coin.cexs = cexs
             else:
                 coin = Coin(
-                    coin_id=coin_id,
+                    coin_id=resolved_id,
                     buy_price=buy_price,
                     amount=amount,
                     found_raises=found_raises,
@@ -186,8 +223,6 @@ def manage():
                 error_message = f"数据库写入失败: {e}"
             else:
                 return redirect(url_for('manage'))
-        else:
-            error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
 
     coins = Coin.query.all()
     return render_template('manage.html', coins=coins, error=error_message)
