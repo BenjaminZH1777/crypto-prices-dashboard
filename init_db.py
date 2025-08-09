@@ -28,6 +28,7 @@ def initialize_database() -> None:
             ('tokenomics', 'TEXT'),
             ('vesting', 'TEXT'),
             ('cexs', 'TEXT'),
+            ('tags', 'TEXT'),
         ]
         for col_name, col_type in migrations:
             if col_name not in cols:
