@@ -1,10 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from pycoingecko import CoinGeckoAPI
+from pathlib import Path
 import time
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coins.db'
+
+# Ensure SQLite uses an absolute path so all workers/processes point to the same DB
+BASE_DIR = Path(__file__).resolve().parent
+DB_DIR = BASE_DIR / 'instance'
+DB_DIR.mkdir(exist_ok=True)
+DB_PATH = DB_DIR / 'coins.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 cg = CoinGeckoAPI()
 
