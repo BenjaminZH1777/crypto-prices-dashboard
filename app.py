@@ -13,6 +13,11 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = BASE_DIR / 'instance'
 DB_DIR.mkdir(exist_ok=True)
 DB_PATH = DB_DIR / 'coins.db'
+VERSION_PATH = BASE_DIR / 'VERSION'
+try:
+    APP_VERSION = VERSION_PATH.read_text(encoding='utf-8').strip()
+except Exception:
+    APP_VERSION = ""
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -82,6 +87,39 @@ def fetch_market_data_for_configured_coins() -> dict:
         markets_data = []
     return {market['id']: market for market in markets_data}
 
+# Cache market data to respect free API limits
+_market_cache = {
+    'data': {},
+    'last_fetch_epoch': 0.0,
+    'ids_key': '',
+}
+
+def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
+    """Return (data_dict, last_fetch_epoch, ttl) with simple in-process cache.
+
+    - Re-fetch when ttl expired or configured coin ids changed
+    - On fetch error, keep previous cache and timestamps
+    """
+    coins = Coin.query.all()
+    coin_ids = [c.coin_id for c in coins]
+    ids_key = ','.join(sorted(coin_ids))
+    now = time.time()
+
+    should_refresh = (
+        ids_key != _market_cache['ids_key'] or
+        (now - _market_cache['last_fetch_epoch'] > ttl_seconds)
+    )
+    if coin_ids and should_refresh:
+        try:
+            markets_data = cg.get_coins_markets(vs_currency='usd', ids=','.join(coin_ids))
+            _market_cache['data'] = {m['id']: m for m in (markets_data or [])}
+            _market_cache['last_fetch_epoch'] = now
+            _market_cache['ids_key'] = ids_key
+        except Exception:
+            # Keep previous cache on failure
+            pass
+    return _market_cache['data'], _market_cache['last_fetch_epoch'], ttl_seconds
+
 def resolve_coingecko_id(user_input: str) -> str:
     """Resolve user-entered text to a CoinGecko API coin id.
 
@@ -126,7 +164,7 @@ def resolve_coingecko_id(user_input: str) -> str:
 
 @app.route('/')
 def index():
-    data_dict = fetch_market_data_for_configured_coins()
+    data_dict, _, _ = get_cached_market_data(ttl_seconds=300)
     coins = Coin.query.all()
     table_data = []
     for coin in coins:
@@ -297,7 +335,7 @@ def edit_coin(coin_db_id: int):
 
 @app.route('/api/data')
 def api_data():
-    data_dict = fetch_market_data_for_configured_coins()
+    data_dict, last_epoch, ttl = get_cached_market_data(ttl_seconds=300)
     coins = Coin.query.all()
     table_data = []
     for coin in coins:
@@ -336,7 +374,13 @@ def api_data():
                 'cexs': coin.cexs,
             }
             table_data.append(table_row)
-    return jsonify(table_data)
+    # Include cache metadata so UI can show last/next refresh
+    response = {
+        'rows': table_data,
+        'last_refresh_epoch': last_epoch if last_epoch else None,
+        'next_refresh_epoch': (last_epoch + ttl) if last_epoch else None,
+    }
+    return jsonify(response)
 
 @app.route('/api/prices')
 def api_prices():
@@ -381,6 +425,10 @@ def api_coin_ids():
     # Returns a small sample of popular coin ids for UI help (not the full 7k list)
     popular = ['bitcoin', 'ethereum', 'tether', 'binancecoin', 'solana', 'ripple', 'dogecoin', 'cardano', 'tron', 'polkadot']
     return jsonify(popular)
+
+@app.context_processor
+def inject_version():
+    return {"APP_VERSION": APP_VERSION}
 
 if __name__ == '__main__':
     with app.app_context():

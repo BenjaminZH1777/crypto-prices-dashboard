@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Crypto Tracker</title>
-    <script src="/static/script.js" defer></script>
+    <script src="/static/script.js?v={{ APP_VERSION }}" defer></script>
     <meta charset="UTF-8">
     <style>
         table { border-collapse: collapse; width: 100%; }
@@ -11,6 +11,8 @@
         /* Alternating row colors for readability */
         tbody tr:nth-child(odd) { background: #ffffff; }
         tbody tr:nth-child(even) { background: #f7fafc; }
+        #timebar { margin: 10px 0; font-size: 14px; color: #333; }
+        #timebar span { margin-right: 12px; }
     </style>
     <div>
         <a href="/manage">管理代币</a>
@@ -18,6 +20,11 @@
     </head>
 <body>
     <h1>项目数据总览</h1>
+    <div id="timebar">
+        <span>UTC Now: <strong id="utc-now">--:--:--</strong></span>
+        <span>Last refresh: <strong id="last-refresh">-</strong></span>
+        <span>Next refresh: <strong id="next-refresh">-</strong></span>
+    </div>
     <table border="1" id="token-table">
         <thead>
             <tr>
