@@ -1,6 +1,6 @@
 ## Crypto Prices Dashboard (Flask + CoinGecko)
 
-版本：`1.0.20250809.017`
+版本：`1.0.20250809.018`
 
 使用 CoinGecko 实时价格 + 自定义字段，管理代币并展示到表格。
 
@@ -8,6 +8,7 @@
 - 配置任意 CoinGecko 代币 ID（如 `bitcoin`、`ethereum`）
 - 后台管理页面添加/删除代币，并填写自定义信息（融资、代币经济学、Vesting 等）
 - 前台表格自动每分钟刷新显示最新价格和你的自定义字段
+ - 新增管理员登录，只有管理员可访问管理页面；首页新增支持打款信息
 
 ### 本地运行
 1. Python 3.10+
@@ -70,6 +71,19 @@
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now crypto_prices
+
+### 管理员配置
+- 在服务器设置环境变量：
+  - `SECRET_KEY`：Flask 会话密钥
+  - `ADMIN_USERNAME`：管理员用户名（默认 `admin`）
+  - 二选一：
+    - `ADMIN_PASSWORD`：明文密码（开发用）
+    - `ADMIN_PASSWORD_HASH`：使用 `werkzeug.security.generate_password_hash` 生成的哈希
+
+### 首页打款信息
+- 已在首页显示：
+  - ERC20 地址：`0x12c7c8c992e74674c6311a182ab72dc2f0a9d13f`
+  - Solana 地址：`7FEHSHCUVcXfMAmqrxmUKtbzBqZ3finTLnTQfSJDBkLL`
    ```
 
 ### DNS 与 CDN

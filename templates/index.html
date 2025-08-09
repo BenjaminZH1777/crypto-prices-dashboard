@@ -13,13 +13,32 @@
         tbody tr:nth-child(even) { background: #f7fafc; }
         #timebar { margin: 10px 0; font-size: 14px; color: #333; }
         #timebar span { margin-right: 12px; }
+        .topbar { display:flex; justify-content: space-between; align-items:center; margin: 10px 0; }
+        .donation { background:#fff7e6; border:1px solid #ffd591; padding:10px; border-radius:6px; margin: 10px 0; }
+        .donation code { background:#fff1b8; padding:2px 4px; border-radius:4px; }
+        .nav a { margin-right: 12px; }
     </style>
-    <div>
-        <a href="/manage">管理代币</a>
-    </div>
     </head>
 <body>
+    <div class="topbar">
+        <div class="nav">
+            {% if IS_ADMIN %}
+            <a href="/manage">管理代币</a>
+            <a href="/logout">退出登录</a>
+            {% else %}
+            <a href="/login">管理员登录</a>
+            {% endif %}
+        </div>
+        <div>版本：<strong>{{ APP_VERSION }}</strong></div>
+    </div>
+
     <h1>项目数据总览</h1>
+
+    <div class="donation">
+        <strong>支持小编：</strong><br>
+        ERC20 地址：<code>0x12c7c8c992e74674c6311a182ab72dc2f0a9d13f</code><br>
+        Solana 地址：<code>7FEHSHCUVcXfMAmqrxmUKtbzBqZ3finTLnTQfSJDBkLL</code>
+    </div>
     <div id="timebar">
         <span>UTC Now: <strong id="utc-now">--:--:--</strong></span>
         <span>Last refresh: <strong id="last-refresh">-</strong></span>

@@ -1,9 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from pycoingecko import CoinGeckoAPI
 from pathlib import Path
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from functools import wraps
+import os
 import time
 import requests
 
@@ -27,6 +29,14 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'timeout': 30,
     }
 }
+
+# Secret key for session cookies (set SECRET_KEY in production)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-insecure-change-me')
+
+# Admin credentials: prefer hash, fallback to plaintext for convenience in dev
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH')  # e.g. pbkdf2:sha256:...
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')  # plaintext fallback if no hash provided
 
 
 @event.listens_for(Engine, "connect")
@@ -192,13 +202,69 @@ def resolve_coingecko_id(user_input: str) -> str:
         pass
     return entered
 
+
+# --------------------------- Admin auth helpers ---------------------------
+def _verify_admin_credentials(username: str, password: str) -> bool:
+    try:
+        if not username or not password:
+            return False
+        if username != ADMIN_USERNAME:
+            return False
+        # Prefer hashed verification if provided
+        if ADMIN_PASSWORD_HASH:
+            try:
+                from werkzeug.security import check_password_hash
+                return check_password_hash(ADMIN_PASSWORD_HASH, password)
+            except Exception:
+                return False
+        # Fallback to plaintext env for dev
+        if ADMIN_PASSWORD is not None:
+            return password == ADMIN_PASSWORD
+        # If neither provided, reject login for safety
+        return False
+    except Exception:
+        return False
+
+
+def require_admin(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if not session.get('is_admin'):
+            next_url = request.path
+            return redirect(url_for('login', next=next_url))
+        return view_func(*args, **kwargs)
+    return wrapper
+
 @app.route('/')
 def index():
     # Keep homepage rendering lightweight to avoid upstream-induced 502s.
     # Data is loaded client-side via /api/data with caching and timeouts.
     return render_template('index.html')
 
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error_message = None
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        if _verify_admin_credentials(username, password):
+            session['is_admin'] = True
+            session['admin_username'] = username
+            dest = request.args.get('next') or url_for('manage')
+            return redirect(dest)
+        error_message = '用户名或密码错误，或管理员未配置'
+        flash(error_message, 'error')
+    return render_template('login.html', error=error_message)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
 @app.route('/manage', methods=['GET', 'POST'])
+@require_admin
 def manage():
     error_message = None
     if request.method == 'POST':
@@ -275,6 +341,7 @@ def manage():
     return render_template('manage.html', coins=coins, error=error_message)
 
 @app.route('/manage/edit/<int:coin_db_id>', methods=['GET', 'POST'])
+@require_admin
 def edit_coin(coin_db_id: int):
     coin = db.session.get(Coin, coin_db_id)
     if not coin:
@@ -408,6 +475,7 @@ def api_prices():
     return jsonify(response)
 
 @app.route('/manage/delete/<int:coin_db_id>', methods=['POST', 'GET'])
+@require_admin
 def delete_coin(coin_db_id: int):
     # Support both POST (form) and GET (direct link) to reduce 405/500 issues behind some proxies
     try:
@@ -429,7 +497,11 @@ def api_coin_ids():
 
 @app.context_processor
 def inject_version():
-    return {"APP_VERSION": APP_VERSION}
+    return {
+        "APP_VERSION": APP_VERSION,
+        "IS_ADMIN": bool(session.get('is_admin')),
+        "ADMIN_USERNAME": session.get('admin_username'),
+    }
 
 if __name__ == '__main__':
     with app.app_context():
