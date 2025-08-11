@@ -3,13 +3,16 @@ var lastRefreshEpochMs = null;
 
 function updateClock() {
     var now = new Date();
-    // Show UTC clock to seconds
+    // Show UTC date time: YYYY-MM-DD HH:mm:ss
     var utc = new Date(now.toISOString());
+    var YYYY = utc.getUTCFullYear();
+    var MM = String(utc.getUTCMonth() + 1).padStart(2, '0');
+    var DD = String(utc.getUTCDate()).padStart(2, '0');
     var hh = String(utc.getUTCHours()).padStart(2, '0');
     var mm = String(utc.getUTCMinutes()).padStart(2, '0');
     var ss = String(utc.getUTCSeconds()).padStart(2, '0');
     var utcNowEl = document.getElementById('utc-now');
-    if (utcNowEl) utcNowEl.textContent = `${hh}:${mm}:${ss}`;
+    if (utcNowEl) utcNowEl.textContent = `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
 
     var lastEl = document.getElementById('last-refresh');
     if (lastEl && lastRefreshEpochMs) {
@@ -53,6 +56,11 @@ async function loadPrices() {
 
     rows.forEach(function(r, idx) {
         var row = document.createElement('tr');
+        var priceVal = (r.price != null && !isNaN(r.price)) ? Number(r.price) : null;
+        var fbpVal = (r.financing_based_price != null && !isNaN(r.financing_based_price)) ? Number(r.financing_based_price) : null;
+        var ibpVal = (r.income_based_price != null && !isNaN(r.income_based_price)) ? Number(r.income_based_price) : null;
+        var fbpStyle = (priceVal != null && fbpVal != null && fbpVal > priceVal) ? 'color:#b91c1c;font-weight:bold;' : '';
+        var ibpStyle = (priceVal != null && ibpVal != null && ibpVal > priceVal) ? 'color:#b91c1c;font-weight:bold;' : '';
         row.innerHTML = `
             <td>${idx + 1}</td>
             <td><a href="https://www.coingecko.com/en/coins/${encodeURIComponent(r.coin_id || '')}" target="_blank" rel="noopener">${orElse(r.coin_name, '-')}</a></td>
@@ -66,10 +74,10 @@ async function loadPrices() {
             <td><a href="https://cryptorank.io/ico/${encodeURIComponent(r.coin_id || '')}" target="_blank" rel="noopener">${fmtMoney(r.found_raises)}</a></td>
             <td>${fmtPercent(r.investor_percentage)}</td>
             <td>${fmtMoney(r.financing_valuation)}</td>
-            <td style="background:#e6fff2;">${fmtMoney(r.financing_based_price)}</td>
+            <td style="background:#e6fff2;${fbpStyle}">${fmtMoney(r.financing_based_price)}</td>
             <td>${fmtMoney(r.annualized_income)}</td>
             <td>${fmtMoney(r.income_valuation)}</td>
-            <td style="background:#e6fff2;">${fmtMoney(r.income_based_price)}</td>
+            <td style="background:#e6fff2;${ibpStyle}">${fmtMoney(r.income_based_price)}</td>
             <td>${orElse(r.tokenomics, '')}</td>
             <td>${orElse(r.vesting, '')}</td>
             <td>${orElse(r.cexs, '')}</td>

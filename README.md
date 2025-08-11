@@ -1,6 +1,6 @@
 ## Crypto Prices Dashboard (Flask + CoinGecko)
 
-版本：`1.1.20250809.002`
+版本：`1.1.20250809.003`
 
 使用 CoinGecko 实时价格 + 自定义字段，管理代币并展示到表格。
 
@@ -9,6 +9,7 @@
 - 后台管理页面添加/删除代币，并填写自定义信息（融资、代币经济学、Vesting 等）
 - 前台表格自动每分钟刷新显示最新价格和你的自定义字段
  - 新增管理员登录，只有管理员可访问管理页面；首页新增支持打款信息
+ - 优化：income based price=income valuation/total supply，且当 financing/income based price 大于现价时，显示为红色；UTC 时钟显示完整年月日
 
 ### 本地运行
 1. Python 3.10+

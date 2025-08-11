@@ -51,6 +51,27 @@ def set_sqlite_pragma(dbapi_connection, connection_record):  # noqa: D401
         # Non-sqlite or failure to set pragmas; ignore
         pass
 db = SQLAlchemy(app)
+
+# Ensure lightweight schema migrations at import time (works under gunicorn)
+def ensure_schema_migrations() -> None:
+    try:
+        from sqlalchemy import text
+        cols = db.session.execute(text("PRAGMA table_info(coin)")).fetchall()
+        names = {c[1] for c in cols}
+        if 'tags' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # ignore
+        pass
+
+try:
+    with app.app_context():
+        db.create_all()
+        ensure_schema_migrations()
+except Exception:
+    pass
 # Use a bounded network timeout to avoid worker hangs on upstream issues.
 # Some environments have an older pycoingecko that doesn't accept the keyword.
 try:
@@ -406,6 +427,7 @@ def api_data():
         market = data_dict.get(coin.coin_id)
         # Compute financing_based_price if inputs available
         computed_fbp = None
+        computed_ibp = None
         try:
             total_supply = (market or {}).get('total_supply')
             found_raises = coin.found_raises
@@ -415,8 +437,13 @@ def api_data():
                 denom = total_supply * investor_fraction
                 if denom:
                     computed_fbp = float(found_raises) / float(denom)
+            # Compute income_based_price = income_valuation / total_supply
+            income_valuation = coin.income_valuation
+            if total_supply and total_supply > 0 and income_valuation:
+                computed_ibp = float(income_valuation) / float(total_supply)
         except Exception:
             computed_fbp = None
+            computed_ibp = None
 
         table_row = {
             'coin_id': coin.coin_id,
@@ -435,7 +462,7 @@ def api_data():
             'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
             'annualized_income': coin.annualized_income,
             'income_valuation': coin.income_valuation,
-            'income_based_price': coin.income_based_price,
+            'income_based_price': computed_ibp if computed_ibp is not None else coin.income_based_price,
             'tokenomics': coin.tokenomics,
             'vesting': coin.vesting,
             'cexs': coin.cexs,
@@ -502,6 +529,9 @@ def inject_version():
         "IS_ADMIN": bool(session.get('is_admin')),
         "ADMIN_USERNAME": session.get('admin_username'),
     }
+
+
+    
 
 if __name__ == '__main__':
     with app.app_context():
