@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, make_response
 from flask_sqlalchemy import SQLAlchemy
 from pycoingecko import CoinGeckoAPI
 from pathlib import Path
@@ -32,6 +32,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 
 # Secret key for session cookies (set SECRET_KEY in production)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-insecure-change-me')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('1','true','yes')
+app.config['PERMANENT_SESSION_LIFETIME'] = int(os.environ.get('SESSION_LIFETIME_SECONDS', '86400'))
 
 # Admin credentials: prefer hash, fallback to plaintext for convenience in dev
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
@@ -72,6 +76,28 @@ try:
         ensure_schema_migrations()
 except Exception:
     pass
+
+
+# --------------------------- Login throttling ---------------------------
+class AdminLoginAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(64), index=True, nullable=False)
+    last_fail_epoch = db.Column(db.Float, default=0.0)
+    fail_count = db.Column(db.Integer, default=0)
+    locked_until_epoch = db.Column(db.Float, default=0.0)
+    last_attempt_epoch = db.Column(db.Float, default=0.0)
+
+    @staticmethod
+    def get_for_ip(ip: str):
+        rec = AdminLoginAttempt.query.filter_by(ip_address=ip).first()
+        if not rec:
+            rec = AdminLoginAttempt(ip_address=ip)
+            db.session.add(rec)
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        return rec
 # Use a bounded network timeout to avoid worker hangs on upstream issues.
 # Some environments have an older pycoingecko that doesn't accept the keyword.
 try:
@@ -172,7 +198,16 @@ def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
         _market_cache['last_attempt_epoch'] = now
         try:
             # Prefer requests with explicit timeout to avoid library differences
-            markets_data = _fetch_markets_via_requests(coin_ids, timeout_seconds=10)
+            # Retry up to 3 times with backoff
+            markets_data = None
+            backoff = 1.0
+            for _ in range(3):
+                try:
+                    markets_data = _fetch_markets_via_requests(coin_ids, timeout_seconds=10)
+                    break
+                except Exception:
+                    time.sleep(backoff)
+                    backoff *= 2
         except Exception:
             markets_data = None
         if markets_data is not None:
@@ -256,26 +291,95 @@ def require_admin(view_func):
         return view_func(*args, **kwargs)
     return wrapper
 
+
+# --------------------------- CSRF protection ---------------------------
+def _get_or_create_csrf_token() -> str:
+    token = session.get('csrf_token')
+    if not token:
+        import secrets
+        token = secrets.token_urlsafe(32)
+        session['csrf_token'] = token
+    return token
+
+
+def _validate_csrf() -> bool:
+    if request.method != 'POST':
+        return True
+    # Only protect HTML form endpoints
+    protected_endpoints = {'manage', 'edit_coin', 'delete_coin', 'login'}
+    if request.endpoint not in protected_endpoints:
+        return True
+    sent = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+    return bool(sent and sent == session.get('csrf_token'))
+
+
+@app.before_request
+def _csrf_before_request():
+    if not _validate_csrf():
+        return make_response(('CSRF token missing or invalid', 400))
+
 @app.route('/')
 def index():
     # Keep homepage rendering lightweight to avoid upstream-induced 502s.
     # Data is loaded client-side via /api/data with caching and timeouts.
-    return render_template('index.html')
+    _get_or_create_csrf_token()
+    resp = make_response(render_template('index.html'))
+    # Cache-control for HTML (short)
+    resp.headers['Cache-Control'] = 'private, max-age=30'
+    return resp
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error_message = None
     if request.method == 'POST':
+        # Throttling per IP
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')
+        try:
+            attempt = AdminLoginAttempt.get_for_ip(ip)
+        except Exception:
+            attempt = None
+
+        now = time.time()
+        lock_active = False
+        if attempt and attempt.locked_until_epoch and now < attempt.locked_until_epoch:
+            lock_active = True
+
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
-        if _verify_admin_credentials(username, password):
+        if not lock_active and _verify_admin_credentials(username, password):
             session['is_admin'] = True
             session['admin_username'] = username
+            # Reset attempts on success
+            if attempt:
+                attempt.fail_count = 0
+                attempt.locked_until_epoch = 0.0
+                attempt.last_attempt_epoch = now
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
             dest = request.args.get('next') or url_for('manage')
             return redirect(dest)
+
+        # Failure path: record attempts and maybe lock
         error_message = '用户名或密码错误，或管理员未配置'
+        if attempt:
+            attempt.last_fail_epoch = now
+            attempt.last_attempt_epoch = now
+            attempt.fail_count = (attempt.fail_count or 0) + 1
+            # Simple backoff: after 5 fails, lock 5 minutes
+            if attempt.fail_count >= 5:
+                attempt.locked_until_epoch = now + 5 * 60
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        if lock_active:
+            error_message = '尝试过多，请稍后再试'
         flash(error_message, 'error')
+    # Ensure csrf token available
+    _get_or_create_csrf_token()
     return render_template('login.html', error=error_message)
 
 
@@ -475,7 +579,20 @@ def api_data():
         'last_refresh_epoch': last_epoch if last_epoch else None,
         'next_refresh_epoch': (last_epoch + ttl) if last_epoch else None,
     }
-    return jsonify(response)
+    resp = make_response(jsonify(response))
+    # ETag/Last-Modified to aid client caches
+    try:
+        import hashlib, json as _json
+        body = _json.dumps(response, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        etag = hashlib.sha1(body).hexdigest()
+        resp.headers['ETag'] = etag
+        if last_epoch:
+            from email.utils import formatdate
+            resp.headers['Last-Modified'] = formatdate(last_epoch, usegmt=True)
+    except Exception:
+        pass
+    resp.headers['Cache-Control'] = 'public, max-age=30'
+    return resp
 
 @app.route('/api/prices')
 def api_prices():
@@ -499,7 +616,9 @@ def api_prices():
             'amount': float(amount) if amount is not None else None,
             'profit': float(profit),
         })
-    return jsonify(response)
+    resp = make_response(jsonify(response))
+    resp.headers['Cache-Control'] = 'public, max-age=30'
+    return resp
 
 @app.route('/manage/delete/<int:coin_db_id>', methods=['POST', 'GET'])
 @require_admin
@@ -520,7 +639,25 @@ def delete_coin(coin_db_id: int):
 def api_coin_ids():
     # Returns a small sample of popular coin ids for UI help (not the full 7k list)
     popular = ['bitcoin', 'ethereum', 'tether', 'binancecoin', 'solana', 'ripple', 'dogecoin', 'cardano', 'tron', 'polkadot']
-    return jsonify(popular)
+    resp = make_response(jsonify(popular))
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    return resp
+
+
+@app.route('/healthz')
+def healthz():
+    # Return minimal ok with app version
+    return make_response({'status': 'ok', 'version': APP_VERSION}, 200)
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('error.html', code=404, message='页面不存在'), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('error.html', code=500, message='服务器错误'), 500
 
 @app.context_processor
 def inject_version():

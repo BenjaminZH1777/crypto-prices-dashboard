@@ -14,6 +14,7 @@
     <div style="color:red;">{{ error }}</div>
     {% endif %}
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
         <label for="coin_id">CoinGecko Coin ID:</label>
         <input type="text" name="coin_id" id="coin_id" placeholder="e.g. bitcoin" required>
         <small>常见ID示例：<span id="popular-ids">loading...</span></small>
@@ -85,6 +86,7 @@
                     <div style="display:flex; gap:6px;">
                         <a href="/manage/edit/{{ coin.id }}" style="padding:4px 8px;border:1px solid #888;border-radius:4px;text-decoration:none;">Edit</a>
                         <form method="POST" action="/manage/delete/{{ coin.id }}" onsubmit="return confirm('删除该代币？');">
+                            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
                             <button type="submit">Delete</button>
                         </form>
                     </div>

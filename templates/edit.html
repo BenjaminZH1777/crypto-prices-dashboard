@@ -11,6 +11,7 @@
     <div style="color:red;">{{ error }}</div>
     {% endif %}
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
         <label for="coin_id">CoinGecko Coin ID:</label>
         <input type="text" name="coin_id" id="coin_id" value="{{ coin.coin_id }}" required>
         <br>

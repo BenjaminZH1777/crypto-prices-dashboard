@@ -21,6 +21,7 @@
         <div class="error">{{ error }}</div>
         {% endif %}
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
             <div class="row">
                 <label for="username">用户名</label>
                 <input type="text" id="username" name="username" required>
