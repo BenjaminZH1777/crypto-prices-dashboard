@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="48" viewBox="0 0 180 48" fill="none">
+  <!-- Wallet icon with C coin mark -->
+  <g transform="translate(0,0)">
+    <path d="M12 14c0-4.418 3.582-8 8-8h56c4.418 0 8 3.582 8 8v22c0 4.418-3.582 8-8 8H20c-4.418 0-8-3.582-8-8V14z" fill="#0B6B3A"/>
+    <path d="M24 10l24-8c3.2-1.067 6 1.067 6 4.4V10H24z" fill="#0B6B3A"/>
+    <!-- C coin mark -->
+    <g transform="translate(34,18)">
+      <defs>
+        <mask id="cm">
+          <rect x="-20" y="-20" width="80" height="80" fill="#fff"/>
+          <!-- cut a vertical bar to open the circle (to look like C) -->
+          <rect x="16" y="-4" width="10" height="28" fill="#000"/>
+        </mask>
+      </defs>
+      <circle cx="12" cy="10" r="12" stroke="#fff" stroke-width="6" fill="none" mask="url(#cm)"/>
+    </g>
+  </g>
+  <!-- reserve right side empty; this logo is icon-only -->
+</svg>
+

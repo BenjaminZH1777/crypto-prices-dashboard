@@ -17,7 +17,11 @@
         .donation { background:#fff7e6; border:1px solid #ffd591; padding:10px; border-radius:6px; margin: 10px 0; }
         .donation code { background:#fff1b8; padding:2px 4px; border-radius:4px; }
         .nav a { margin-right: 12px; }
+        .branding { display:flex; align-items:center; gap:10px; }
+        .branding .logo { height:26px; width:auto; display:inline-block; }
     </style>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{ APP_VERSION }}">
+    <link rel="apple-touch-icon" href="/static/favicon.svg?v={{ APP_VERSION }}">
     </head>
 <body>
     <div class="topbar">
@@ -29,7 +33,10 @@
             <a href="/login">管理员登录</a>
             {% endif %}
         </div>
-        <div>版本：<strong>{{ APP_VERSION }}</strong></div>
+        <div class="branding">
+            <img class="logo" src="/static/logo.svg?v={{ APP_VERSION }}" alt="site logo">
+            <span>版本：<strong>{{ APP_VERSION }}</strong></span>
+        </div>
     </div>
 
     <h1>Bianace/OKX新币数据浏览</h1>
