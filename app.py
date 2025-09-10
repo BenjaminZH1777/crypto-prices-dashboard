@@ -8,8 +8,14 @@ from functools import wraps
 import os
 import time
 import requests
+import logging
+import traceback
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 
 # Ensure SQLite uses an absolute path so all workers/processes point to the same DB
 BASE_DIR = Path(__file__).resolve().parent
@@ -303,6 +309,7 @@ def _get_or_create_csrf_token() -> str:
 
 
 def _validate_csrf() -> bool:
+    # Only validate CSRF for POST requests to form endpoints
     if request.method != 'POST':
         return True
     # Only protect HTML form endpoints
@@ -315,18 +322,28 @@ def _validate_csrf() -> bool:
 
 @app.before_request
 def _csrf_before_request():
-    if not _validate_csrf():
-        return make_response(('CSRF token missing or invalid', 400))
+    try:
+        if not _validate_csrf():
+            return make_response(('CSRF token missing or invalid', 400))
+    except Exception as e:
+        app.logger.error(f"CSRF validation error: {e}")
+        # Don't block requests on CSRF validation errors
+        pass
 
 @app.route('/')
 def index():
-    # Keep homepage rendering lightweight to avoid upstream-induced 502s.
-    # Data is loaded client-side via /api/data with caching and timeouts.
-    _get_or_create_csrf_token()
-    resp = make_response(render_template('index.html'))
-    # Cache-control for HTML (short)
-    resp.headers['Cache-Control'] = 'private, max-age=30'
-    return resp
+    try:
+        # Keep homepage rendering lightweight to avoid upstream-induced 502s.
+        # Data is loaded client-side via /api/data with caching and timeouts.
+        _get_or_create_csrf_token()
+        resp = make_response(render_template('index.html'))
+        # Cache-control for HTML (short)
+        resp.headers['Cache-Control'] = 'private, max-age=30'
+        return resp
+    except Exception as e:
+        app.logger.error(f"Homepage error: {e}")
+        app.logger.error(traceback.format_exc())
+        return make_response("Service temporarily unavailable", 503)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -524,75 +541,80 @@ def edit_coin(coin_db_id: int):
 
 @app.route('/api/data')
 def api_data():
-    data_dict, last_epoch, ttl = get_cached_market_data(ttl_seconds=300)
-    coins = Coin.query.all()
-    table_data = []
-    for coin in coins:
-        market = data_dict.get(coin.coin_id)
-        # Compute financing_based_price if inputs available
-        computed_fbp = None
-        computed_ibp = None
-        try:
-            total_supply = (market or {}).get('total_supply')
-            found_raises = coin.found_raises
-            investor_pct = coin.investor_percentage
-            if total_supply and total_supply > 0 and found_raises and investor_pct:
-                investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
-                denom = total_supply * investor_fraction
-                if denom:
-                    computed_fbp = float(found_raises) / float(denom)
-            # Compute income_based_price = income_valuation / total_supply
-            income_valuation = coin.income_valuation
-            if total_supply and total_supply > 0 and income_valuation:
-                computed_ibp = float(income_valuation) / float(total_supply)
-        except Exception:
+    try:
+        data_dict, last_epoch, ttl = get_cached_market_data(ttl_seconds=300)
+        coins = Coin.query.all()
+        table_data = []
+        for coin in coins:
+            market = data_dict.get(coin.coin_id)
+            # Compute financing_based_price if inputs available
             computed_fbp = None
             computed_ibp = None
+            try:
+                total_supply = (market or {}).get('total_supply')
+                found_raises = coin.found_raises
+                investor_pct = coin.investor_percentage
+                if total_supply and total_supply > 0 and found_raises and investor_pct:
+                    investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
+                    denom = total_supply * investor_fraction
+                    if denom:
+                        computed_fbp = float(found_raises) / float(denom)
+                # Compute income_based_price = income_valuation / total_supply
+                income_valuation = coin.income_valuation
+                if total_supply and total_supply > 0 and income_valuation:
+                    computed_ibp = float(income_valuation) / float(total_supply)
+            except Exception:
+                computed_fbp = None
+                computed_ibp = None
 
-        table_row = {
-            'coin_id': coin.coin_id,
-            'coin_name': (market or {}).get('name') or coin.coin_id,
-            'price': (market or {}).get('current_price'),
-            'current_supply': (market or {}).get('circulating_supply'),
-            'current_market_cap': (market or {}).get('market_cap'),
-            'total_supply': (market or {}).get('total_supply'),
-            'total_market_cap': (market or {}).get('fully_diluted_valuation', 0),
-            'last_updated': (market or {}).get('last_updated'),
-            'pct_24h': (market or {}).get('price_change_percentage_24h_in_currency', (market or {}).get('price_change_percentage_24h')),
-            'pct_7d': (market or {}).get('price_change_percentage_7d_in_currency'),
-            'found_raises': coin.found_raises,
-            'investor_percentage': coin.investor_percentage,
-            'financing_valuation': coin.financing_valuation,
-            'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
-            'annualized_income': coin.annualized_income,
-            'income_valuation': coin.income_valuation,
-            'income_based_price': computed_ibp if computed_ibp is not None else coin.income_based_price,
-            'tokenomics': coin.tokenomics,
-            'vesting': coin.vesting,
-            'cexs': coin.cexs,
-            'tags': coin.tags,
+            table_row = {
+                'coin_id': coin.coin_id,
+                'coin_name': (market or {}).get('name') or coin.coin_id,
+                'price': (market or {}).get('current_price'),
+                'current_supply': (market or {}).get('circulating_supply'),
+                'current_market_cap': (market or {}).get('market_cap'),
+                'total_supply': (market or {}).get('total_supply'),
+                'total_market_cap': (market or {}).get('fully_diluted_valuation', 0),
+                'last_updated': (market or {}).get('last_updated'),
+                'pct_24h': (market or {}).get('price_change_percentage_24h_in_currency', (market or {}).get('price_change_percentage_24h')),
+                'pct_7d': (market or {}).get('price_change_percentage_7d_in_currency'),
+                'found_raises': coin.found_raises,
+                'investor_percentage': coin.investor_percentage,
+                'financing_valuation': coin.financing_valuation,
+                'financing_based_price': computed_fbp if computed_fbp is not None else coin.financing_based_price,
+                'annualized_income': coin.annualized_income,
+                'income_valuation': coin.income_valuation,
+                'income_based_price': computed_ibp if computed_ibp is not None else coin.income_based_price,
+                'tokenomics': coin.tokenomics,
+                'vesting': coin.vesting,
+                'cexs': coin.cexs,
+                'tags': coin.tags,
+            }
+            table_data.append(table_row)
+        # Include cache metadata so UI can show last/next refresh
+        response = {
+            'rows': table_data,
+            'last_refresh_epoch': last_epoch if last_epoch else None,
+            'next_refresh_epoch': (last_epoch + ttl) if last_epoch else None,
         }
-        table_data.append(table_row)
-    # Include cache metadata so UI can show last/next refresh
-    response = {
-        'rows': table_data,
-        'last_refresh_epoch': last_epoch if last_epoch else None,
-        'next_refresh_epoch': (last_epoch + ttl) if last_epoch else None,
-    }
-    resp = make_response(jsonify(response))
-    # ETag/Last-Modified to aid client caches
-    try:
-        import hashlib, json as _json
-        body = _json.dumps(response, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-        etag = hashlib.sha1(body).hexdigest()
-        resp.headers['ETag'] = etag
-        if last_epoch:
-            from email.utils import formatdate
-            resp.headers['Last-Modified'] = formatdate(last_epoch, usegmt=True)
-    except Exception:
-        pass
-    resp.headers['Cache-Control'] = 'public, max-age=30'
-    return resp
+        resp = make_response(jsonify(response))
+        # ETag/Last-Modified to aid client caches
+        try:
+            import hashlib, json as _json
+            body = _json.dumps(response, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+            etag = hashlib.sha1(body).hexdigest()
+            resp.headers['ETag'] = etag
+            if last_epoch:
+                from email.utils import formatdate
+                resp.headers['Last-Modified'] = formatdate(last_epoch, usegmt=True)
+        except Exception:
+            pass
+        resp.headers['Cache-Control'] = 'public, max-age=30'
+        return resp
+    except Exception as e:
+        app.logger.error(f"API data error: {e}")
+        app.logger.error(traceback.format_exc())
+        return make_response(jsonify({'error': 'Data temporarily unavailable', 'rows': []}), 503)
 
 @app.route('/api/prices')
 def api_prices():
@@ -646,8 +668,26 @@ def api_coin_ids():
 
 @app.route('/healthz')
 def healthz():
-    # Return minimal ok with app version
-    return make_response({'status': 'ok', 'version': APP_VERSION}, 200)
+    try:
+        # Basic health checks
+        checks = {
+            'app': True,
+            'database': False,
+            'version': APP_VERSION
+        }
+        
+        # Test database connection
+        try:
+            Coin.query.count()
+            checks['database'] = True
+        except Exception as e:
+            app.logger.warning(f"Database health check failed: {e}")
+        
+        status_code = 200 if checks['database'] else 503
+        return make_response(checks, status_code)
+    except Exception as e:
+        app.logger.error(f"Health check error: {e}")
+        return make_response({'status': 'error', 'message': str(e)}, 500)
 
 
 @app.errorhandler(404)
@@ -670,22 +710,49 @@ def inject_version():
 
     
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        # lightweight migration for new columns
-        try:
-            from sqlalchemy import text
-            cols = db.session.execute(text("PRAGMA table_info(coin)")).fetchall()
-            names = {c[1] for c in cols}
-            if 'tags' not in names:
-                db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
+def startup_health_check():
+    """Perform startup health checks and log results"""
+    try:
+        app.logger.info("Starting health checks...")
+        
+        # Test database
+        with app.app_context():
+            db.create_all()
+            # lightweight migration for new columns
+            try:
+                from sqlalchemy import text
+                cols = db.session.execute(text("PRAGMA table_info(coin)")).fetchall()
+                names = {c[1] for c in cols}
+                if 'tags' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+            except Exception as e:
+                app.logger.error(f"Schema migration failed: {e}")
+                db.session.rollback()
+            
+            # Seed with a few popular coins if database is empty
+            if Coin.query.count() == 0:
+                for coin_id in ['bitcoin', 'ethereum', 'solana']:
+                    db.session.add(Coin(coin_id=coin_id))
                 db.session.commit()
-        except Exception:
-            db.session.rollback()
-        # Seed with a few popular coins if database is empty
-        if Coin.query.count() == 0:
-            for coin_id in ['bitcoin', 'ethereum', 'solana']:
-                db.session.add(Coin(coin_id=coin_id))
-            db.session.commit()
-    app.run(debug=True)
+                app.logger.info("Database seeded with initial coins")
+            
+            # Test basic functionality
+            coin_count = Coin.query.count()
+            app.logger.info(f"Database health check passed: {coin_count} coins found")
+            
+        app.logger.info("All startup health checks passed")
+        return True
+    except Exception as e:
+        app.logger.error(f"Startup health check failed: {e}")
+        app.logger.error(traceback.format_exc())
+        return False
+
+if __name__ == '__main__':
+    if startup_health_check():
+        app.logger.info("Starting Flask development server...")
+        app.run(debug=True)
+    else:
+        app.logger.error("Startup health checks failed, exiting...")
+        exit(1)
