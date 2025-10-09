@@ -156,7 +156,7 @@ def fetch_market_data_for_configured_coins() -> dict:
     if not coin_ids:
         return {}
     try:
-        markets_data = cg.get_coins_markets(vs_currency='usd', ids=','.join(coin_ids))
+        markets_data = cg.get_coins_markets(vs_currency='usd', ids=','.join(coin_ids), price_change_percentage='24h,7d')
     except Exception:
         markets_data = []
     return {market['id']: market for market in markets_data}
@@ -576,8 +576,8 @@ def api_data():
                 'total_supply': (market or {}).get('total_supply'),
                 'total_market_cap': (market or {}).get('fully_diluted_valuation', 0),
                 'last_updated': (market or {}).get('last_updated'),
-                'pct_24h': (market or {}).get('price_change_percentage_24h'),
-                'pct_7d': (market or {}).get('price_change_percentage_7d'),
+                'pct_24h': (market or {}).get('price_change_percentage_24h_in_currency', (market or {}).get('price_change_percentage_24h')),
+                'pct_7d': (market or {}).get('price_change_percentage_7d_in_currency'),
                 'found_raises': coin.found_raises,
                 'investor_percentage': coin.investor_percentage,
                 'financing_valuation': coin.financing_valuation,
