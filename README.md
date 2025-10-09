@@ -1,6 +1,6 @@
 ## Crypto Prices Dashboard (Flask + CoinGecko)
 
-版本：`1.2.20250811.005`
+版本：`1.1.20251010.001`
 
 使用 CoinGecko 实时价格 + 自定义字段，管理代币并展示到表格。
 
@@ -11,9 +11,15 @@
  - 新增管理员登录，只有管理员可访问管理页面；首页新增支持打款信息
  - 优化：income based price=income valuation/total supply，且当 financing/income based price 大于现价时，显示为红色；UTC 时钟显示完整年月日
  - 安全：启用 CSRF 保护、登录限速/失败锁定（5 次失败锁 5 分钟）、会话 Cookie 安全参数
-- 性能：为接口增加 Cache-Control/ETag/Last-Modified，增加 CoinGecko 重试回退；新增 /healthz 健康检查与自定义错误页
+ - 性能：为接口增加 Cache-Control/ETag/Last-Modified，增加 CoinGecko 重试回退；新增 /healthz 健康检查与自定义错误页
 - UI：新增站点 logo；首页版本号左侧展示 logo；浏览器标签页 favicon 使用同款 icon（无文字）
 - 稳定性：修复 CSRF 保护阻塞 GET 请求问题；增加全面错误处理与日志记录；启动时健康检查与优雅降级
+- **v1.3 新功能**：
+  - 🎨 **深色模式**：支持明暗主题切换，自动保存用户偏好
+  - 📱 **移动端优化**：响应式设计，触摸友好的界面
+  - 🔍 **搜索过滤**：实时搜索代币名称/ID，按价格变化和市值过滤
+  - 📊 **数据导出**：一键导出CSV格式数据
+  - 🎯 **UI现代化**：使用CSS变量，更好的视觉层次和交互体验
 
 ### 本地运行
 1. Python 3.10+
