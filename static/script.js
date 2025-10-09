@@ -106,11 +106,11 @@ function renderTable(data) {
     var fmtPercent = function(v) {
         if (v == null || isNaN(v)) return '-';
         var n = Number(v);
-        var pct = n <= 1 ? n * 100 : n;
-        var formatted = (Math.round(pct * 100) / 100).toString() + '%';
+        // CoinGecko已经返回百分比格式，不需要转换
+        var formatted = (Math.round(n * 100) / 100).toFixed(2) + '%';
         // 添加颜色指示
-        if (pct > 0) return '<span style="color: var(--success-color);">' + formatted + '</span>';
-        if (pct < 0) return '<span style="color: var(--error-color);">' + formatted + '</span>';
+        if (n > 0) return '<span style="color: var(--success-color);">+' + formatted + '</span>';
+        if (n < 0) return '<span style="color: var(--error-color);">' + formatted + '</span>';
         return formatted;
     };
 
