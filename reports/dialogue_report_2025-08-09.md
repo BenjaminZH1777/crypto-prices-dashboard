@@ -37,9 +37,10 @@
 5. 创建 systemd 服务 `crypto_prices.service`，反代 Nginx 到 127.0.0.1:8000。
 
 ### 域名与证书
-- 域名：`retailgo2048.ip-ddns.com`。
-- DNS 在 Cloudns 指向 VPS 公网 IP。
-- HTTPS：`certbot --nginx -d retailgo2048.ip-ddns.com --agree-tos -m <你的邮箱> --redirect --no-eff-email`。
+- 域名：`retailgo2048.com`。
+- VPS IP：`156.244.46.107`
+- DNS 在 Cloudns 指向 VPS 公网 IP `156.244.46.107`。
+- HTTPS：`certbot --nginx -d retailgo2048.com --agree-tos -m <你的邮箱> --redirect --no-eff-email`。
 
 ## 页面与接口
 - 前台：`/`（表格：名称、当前价、买入价、数量、盈亏；30 秒刷新）
