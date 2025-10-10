@@ -113,13 +113,22 @@ def send_email(subject, body_html):
             # QQ邮箱使用SSL端口465
             import ssl
             context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(SMTP_SERVER, 465, context=context) as server:
+            server = smtplib.SMTP_SSL(SMTP_SERVER, 465, context=context, timeout=30)
+            try:
+                server.ehlo()
                 server.login(SMTP_USERNAME, SMTP_PASSWORD)
                 server.send_message(msg)
+            finally:
+                try:
+                    server.quit()
+                except:
+                    pass
         else:
             # 其他邮箱使用TLS
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.ehlo()
                 server.starttls()
+                server.ehlo()
                 server.login(SMTP_USERNAME, SMTP_PASSWORD)
                 server.send_message(msg)
         
