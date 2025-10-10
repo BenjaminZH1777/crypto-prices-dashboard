@@ -1,6 +1,6 @@
 ## Crypto Prices Dashboard (Flask + CoinGecko)
 
-版本：`1.2.20251010.001`
+版本：`1.2.20251010.004`
 
 使用 CoinGecko 实时价格 + 自定义字段，管理代币并展示到表格。
 
