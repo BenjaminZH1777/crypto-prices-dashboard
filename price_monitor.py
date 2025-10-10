@@ -108,17 +108,26 @@ def send_email(subject, body_html):
         html_part = MIMEText(body_html, 'html', 'utf-8')
         msg.attach(html_part)
         
-        # 连接SMTP服务器并发送
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
+        # QQ邮箱需要使用SSL连接
+        if 'qq.com' in SMTP_SERVER.lower():
+            # QQ邮箱使用SSL端口465
+            import ssl
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(SMTP_SERVER, 465, context=context) as server:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            # 其他邮箱使用TLS
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
         
         logger.info(f"邮件发送成功: {subject}")
         return True
         
     except Exception as e:
-        logger.error(f"发送邮件失败: {e}")
+        logger.error(f"发送邮件失败: {e}", exc_info=True)
         return False
 
 
