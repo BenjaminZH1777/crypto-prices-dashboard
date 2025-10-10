@@ -237,33 +237,58 @@ def check_prices():
                 
                 coin_name = market.get('name', coin.coin_id)
                 
+                # 计算融资价格（与app.py逻辑一致）
+                computed_fbp = None
+                computed_ibp = None
+                try:
+                    total_supply = market.get('total_supply')
+                    found_raises = coin.found_raises
+                    investor_pct = coin.investor_percentage
+                    if total_supply and total_supply > 0 and found_raises and investor_pct:
+                        investor_fraction = investor_pct if investor_pct <= 1 else investor_pct / 100.0
+                        denom = total_supply * investor_fraction
+                        if denom:
+                            computed_fbp = float(found_raises) / float(denom)
+                    # 计算收入价格 = income_valuation / total_supply
+                    income_valuation = coin.income_valuation
+                    if total_supply and total_supply > 0 and income_valuation:
+                        computed_ibp = float(income_valuation) / float(total_supply)
+                except Exception as e:
+                    logger.error(f"计算价格失败 {coin.coin_id}: {e}")
+                    computed_fbp = None
+                    computed_ibp = None
+                
+                # 使用计算后的价格，如果没有则使用数据库中的值
+                financing_based_price = computed_fbp if computed_fbp is not None else coin.financing_based_price
+                income_based_price = computed_ibp if computed_ibp is not None else coin.income_based_price
+                
                 # 检查融资价格
-                if coin.financing_based_price and current_price < coin.financing_based_price:
+                if financing_based_price and current_price < financing_based_price:
                     if should_send_alert(coin.coin_id, PriceAlert.FINANCING_PRICE, alert_history):
-                        percentage = ((current_price - coin.financing_based_price) / coin.financing_based_price) * 100
+                        percentage = ((current_price - financing_based_price) / financing_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
                             'coin_name': coin_name,
                             'current_price': current_price,
-                            'target_price': coin.financing_based_price,
+                            'target_price': financing_based_price,
                             'type': PriceAlert.FINANCING_PRICE,
                             'percentage': percentage
                         })
-                        logger.info(f"触发融资价格提醒: {coin_name} 当前${current_price:.6f} < 融资${coin.financing_based_price:.6f}")
+                        logger.info(f"触发融资价格提醒: {coin_name} 当前${current_price:.6f} < 融资${financing_based_price:.6f}")
                 
                 # 检查收入价格
-                if coin.income_based_price and current_price < coin.income_based_price:
+                if income_based_price and current_price < income_based_price:
                     if should_send_alert(coin.coin_id, PriceAlert.INCOME_PRICE, alert_history):
-                        percentage = ((current_price - coin.income_based_price) / coin.income_based_price) * 100
+                        percentage = ((current_price - income_based_price) / income_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
                             'coin_name': coin_name,
                             'current_price': current_price,
-                            'target_price': coin.income_based_price,
+                            'target_price': income_based_price,
                             'type': PriceAlert.INCOME_PRICE,
                             'percentage': percentage
                         })
-                        logger.info(f"触发收入价格提醒: {coin_name} 当前${current_price:.6f} < 收入${coin.income_based_price:.6f}")
+                        logger.info(f"触发收入价格提醒: {coin_name} 当前${current_price:.6f} < 收入${income_based_price:.6f}")
             
             # 发送提醒邮件
             if alerts_to_send:
