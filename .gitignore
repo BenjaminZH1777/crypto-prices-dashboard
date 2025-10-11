@@ -1,15 +1,62 @@
+# Python
 __pycache__/
-*.pyc
-.venv/
-venv/
-.env
-.DS_Store
-coins.db
-instance/
-*.log
-.pytest_cache/
-.coverage
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 dist/
 build/
-*.egg-info/
 
+# 虚拟环境
+.venv/
+venv/
+ENV/
+env/
+
+# 数据库
+instance/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# 日志文件
+*.log
+*.log.*
+
+# 环境变量和配置
+.env
+.env.local
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 提醒历史
+alert_history.txt
+
+# 临时文件
+*.tmp
+*.bak
+*.backup
+
+# 测试覆盖率
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 部署相关（敏感）
+*.pem
+*.key
+secrets/
