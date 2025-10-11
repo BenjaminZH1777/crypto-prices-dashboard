@@ -89,6 +89,38 @@
             z-index: 10;
         }
         
+        /* 可排序列样式 */
+        th[data-sort] {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 20px;
+        }
+        
+        th[data-sort]:hover {
+            background: var(--border-color);
+        }
+        
+        th[data-sort]::after {
+            content: '⇅';
+            position: absolute;
+            right: 6px;
+            opacity: 0.3;
+            font-size: 12px;
+        }
+        
+        th.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+            color: var(--accent-color);
+        }
+        
+        th.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+            color: var(--accent-color);
+        }
+        
         /* 交替行颜色 */
         tbody tr:nth-child(odd) { background: var(--bg-secondary); }
         tbody tr:nth-child(even) { background: var(--bg-primary); }
@@ -276,6 +308,35 @@
             background: var(--accent-hover);
         }
         
+        /* 统计面板样式 */
+        .stats-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+        
         /* 控件栏样式 */
         .controls-bar {
             display: flex;
@@ -420,6 +481,26 @@
         ERC20 地址：<code>0x12c7c8c992e74674c6311a182ab72dc2f0a9d13f</code><br>
         Solana 地址：<code>7FEHSHCUVcXfMAmqrxmUKtbzBqZ3finTLnTQfSJDBkLL</code>
     </div>
+    <!-- 统计信息面板 -->
+    <div class="stats-panel">
+        <div class="stat-card">
+            <div class="stat-label">监控代币</div>
+            <div class="stat-value" id="total-coins">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">平均24h变化</div>
+            <div class="stat-value" id="avg-24h">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">上涨/下跌</div>
+            <div class="stat-value" id="gain-loss">-/-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">总市值</div>
+            <div class="stat-value" id="total-mcap">-</div>
+        </div>
+    </div>
+    
     <div id="timebar">
         <span>UTC Now: <strong id="utc-now">--:--:--</strong></span>
         <span>Last refresh: <strong id="last-refresh">-</strong></span>
@@ -453,21 +534,21 @@
             <thead>
                 <tr>
                     <th class="important-col">#</th>
-                    <th class="important-col">代币名称</th>
-                    <th class="price-col important-col">当前价格</th>
-                    <th>24h %</th>
-                    <th>7d %</th>
-                    <th>流通供应量</th>
-                    <th>流通市值</th>
-                    <th>总供应量</th>
-                    <th>总市值</th>
-                    <th>融资轮次</th>
-                    <th>投资者比例</th>
-                    <th>融资估值</th>
-                    <th class="price-col">融资价格</th>
-                    <th>年化收入</th>
-                    <th>收入估值</th>
-                    <th class="price-col">收入价格</th>
+                    <th class="important-col" data-sort="coin_name" onclick="handleSort('coin_name')">代币名称</th>
+                    <th class="price-col important-col" data-sort="price" onclick="handleSort('price')">当前价格</th>
+                    <th data-sort="pct_24h" onclick="handleSort('pct_24h')">24h %</th>
+                    <th data-sort="pct_7d" onclick="handleSort('pct_7d')">7d %</th>
+                    <th data-sort="current_supply" onclick="handleSort('current_supply')">流通供应量</th>
+                    <th data-sort="current_market_cap" onclick="handleSort('current_market_cap')">流通市值</th>
+                    <th data-sort="total_supply" onclick="handleSort('total_supply')">总供应量</th>
+                    <th data-sort="total_market_cap" onclick="handleSort('total_market_cap')">总市值</th>
+                    <th data-sort="found_raises" onclick="handleSort('found_raises')">融资轮次</th>
+                    <th data-sort="investor_percentage" onclick="handleSort('investor_percentage')">投资者比例</th>
+                    <th data-sort="financing_valuation" onclick="handleSort('financing_valuation')">融资估值</th>
+                    <th class="price-col" data-sort="financing_based_price" onclick="handleSort('financing_based_price')">融资价格</th>
+                    <th data-sort="annualized_income" onclick="handleSort('annualized_income')">年化收入</th>
+                    <th data-sort="income_valuation" onclick="handleSort('income_valuation')">收入估值</th>
+                    <th class="price-col" data-sort="income_based_price" onclick="handleSort('income_based_price')">收入价格</th>
                     <th>代币经济学</th>
                     <th>锁仓</th>
                     <th>交易所</th>

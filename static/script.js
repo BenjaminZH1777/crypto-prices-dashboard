@@ -1,6 +1,7 @@
 var nextRefreshEpochMs = null;
 var lastRefreshEpochMs = null;
 var allData = []; // 存储所有数据用于过滤
+var currentSort = { column: null, direction: 'asc' }; // 当前排序状态
 
 // 主题管理
 function initTheme() {
@@ -21,6 +22,76 @@ function updateThemeIcon(theme) {
     const icon = document.getElementById('theme-icon');
     if (icon) {
         icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+}
+
+// 排序功能
+function sortData(data, column) {
+    if (!column) return data;
+    
+    var sorted = data.slice(); // 复制数组
+    var direction = currentSort.direction;
+    
+    sorted.sort(function(a, b) {
+        var aVal = a[column];
+        var bVal = b[column];
+        
+        // 处理null/undefined
+        if (aVal === null || aVal === undefined) aVal = -Infinity;
+        if (bVal === null || bVal === undefined) bVal = -Infinity;
+        
+        // 数字比较
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return direction === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        
+        // 字符串比较
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+        
+        if (direction === 'asc') {
+            return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else {
+            return bVal < aVal ? -1 : bVal > aVal ? 1 : 0;
+        }
+    });
+    
+    return sorted;
+}
+
+function handleSort(column) {
+    // 切换排序方向
+    if (currentSort.column === column) {
+        if (currentSort.direction === 'asc') {
+            currentSort.direction = 'desc';
+        } else {
+            currentSort.column = null;
+            currentSort.direction = 'asc';
+        }
+    } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+    
+    // 重新应用过滤（会包含排序）
+    applyFilters();
+    
+    // 更新表头排序指示器
+    updateSortIndicators();
+}
+
+function updateSortIndicators() {
+    // 移除所有排序指示器
+    document.querySelectorAll('th[data-sort]').forEach(function(th) {
+        th.classList.remove('sort-asc', 'sort-desc');
+    });
+    
+    // 添加当前排序指示器
+    if (currentSort.column) {
+        var th = document.querySelector('th[data-sort="' + currentSort.column + '"]');
+        if (th) {
+            th.classList.add('sort-' + currentSort.direction);
+        }
     }
 }
 
@@ -72,6 +143,11 @@ function applyFilters() {
         
         return true;
     });
+    
+    // 应用排序
+    if (currentSort.column) {
+        filteredData = sortData(filteredData, currentSort.column);
+    }
     
     renderTable(filteredData);
 }
@@ -175,6 +251,50 @@ function renderTable(data) {
     });
 }
 
+// 更新统计信息
+function updateStats(data) {
+    if (!data || data.length === 0) {
+        document.getElementById('total-coins').textContent = '0';
+        document.getElementById('avg-24h').textContent = '-';
+        document.getElementById('gain-loss').textContent = '-/-';
+        document.getElementById('total-mcap').textContent = '-';
+        return;
+    }
+    
+    // 总代币数
+    document.getElementById('total-coins').textContent = data.length;
+    
+    // 计算平均24h变化
+    var validPct24h = data.filter(function(r) { return r.pct_24h != null; });
+    if (validPct24h.length > 0) {
+        var sum = validPct24h.reduce(function(acc, r) { return acc + r.pct_24h; }, 0);
+        var avg = sum / validPct24h.length;
+        var avgEl = document.getElementById('avg-24h');
+        avgEl.textContent = avg.toFixed(2) + '%';
+        avgEl.style.color = avg > 0 ? 'var(--success-color)' : avg < 0 ? 'var(--error-color)' : 'var(--text-primary)';
+    }
+    
+    // 上涨/下跌代币数
+    var gainCount = data.filter(function(r) { return r.pct_24h > 0; }).length;
+    var lossCount = data.filter(function(r) { return r.pct_24h < 0; }).length;
+    var gainLossEl = document.getElementById('gain-loss');
+    gainLossEl.innerHTML = '<span style="color:var(--success-color);">' + gainCount + '</span>/<span style="color:var(--error-color);">' + lossCount + '</span>';
+    
+    // 总市值
+    var totalMcap = data.reduce(function(acc, r) { 
+        return acc + (r.current_market_cap || 0); 
+    }, 0);
+    
+    var mcapEl = document.getElementById('total-mcap');
+    if (totalMcap >= 1e9) {
+        mcapEl.textContent = '$' + (totalMcap / 1e9).toFixed(2) + 'B';
+    } else if (totalMcap >= 1e6) {
+        mcapEl.textContent = '$' + (totalMcap / 1e6).toFixed(2) + 'M';
+    } else {
+        mcapEl.textContent = '$' + totalMcap.toFixed(0);
+    }
+}
+
 // 导出功能
 function exportData() {
     const data = allData;
@@ -267,6 +387,9 @@ async function loadPrices() {
 
         // 存储所有数据用于过滤
         allData = rows;
+        
+        // 更新统计信息
+        updateStats(rows);
         
         // 应用当前过滤条件
         applyFilters();
