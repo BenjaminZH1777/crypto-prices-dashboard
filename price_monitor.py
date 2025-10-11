@@ -18,7 +18,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-from app import app, db, Coin, get_cached_market_data
+from app import app, db, Coin, SystemSettings, get_cached_market_data
 
 # 配置日志
 logging.basicConfig(
@@ -38,8 +38,9 @@ SMTP_USERNAME = os.environ.get('SMTP_USERNAME', '')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 ALERT_EMAIL = os.environ.get('ALERT_EMAIL', '')  # 接收提醒的邮箱
 
-# 提醒冷却时间（小时）- 同一个代币同一种提醒在此时间内不重复发送
-ALERT_COOLDOWN_HOURS = 24
+# 提醒冷却时间（小时）- 从数据库读取，默认24小时
+# 这个值会在check_prices()函数中从数据库动态读取
+ALERT_COOLDOWN_HOURS = 24  # 默认值
 
 # 提醒记录存储
 ALERT_HISTORY_FILE = BASE_DIR / 'alert_history.txt'
@@ -79,7 +80,7 @@ def save_alert_history(history):
         logger.error(f"保存提醒历史失败: {e}")
 
 
-def should_send_alert(coin_id, alert_type, history):
+def should_send_alert(coin_id, alert_type, history, cooldown_hours):
     """判断是否应该发送提醒（检查冷却时间）"""
     key = f"{coin_id}_{alert_type}"
     if key not in history:
@@ -89,7 +90,7 @@ def should_send_alert(coin_id, alert_type, history):
     time_passed = time.time() - last_alert_time
     hours_passed = time_passed / 3600
     
-    return hours_passed >= ALERT_COOLDOWN_HOURS
+    return hours_passed >= cooldown_hours
 
 
 def send_email(subject, body_html):
@@ -229,6 +230,15 @@ def check_prices():
     
     with app.app_context():
         try:
+            # 从数据库读取冷却时间设置
+            cooldown_hours_str = SystemSettings.get_setting('alert_cooldown_hours', '24')
+            try:
+                cooldown_hours = float(cooldown_hours_str)
+            except:
+                cooldown_hours = 24.0
+            
+            logger.info(f"当前提醒冷却时间: {cooldown_hours} 小时")
+            
             # 获取市场数据
             market_data, last_fetch, ttl = get_cached_market_data(ttl_seconds=300)
             
@@ -282,7 +292,7 @@ def check_prices():
                 
                 # 检查融资价格
                 if financing_based_price and current_price < financing_based_price:
-                    if should_send_alert(coin.coin_id, PriceAlert.FINANCING_PRICE, alert_history):
+                    if should_send_alert(coin.coin_id, PriceAlert.FINANCING_PRICE, alert_history, cooldown_hours):
                         percentage = ((current_price - financing_based_price) / financing_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
@@ -296,7 +306,7 @@ def check_prices():
                 
                 # 检查收入价格
                 if income_based_price and current_price < income_based_price:
-                    if should_send_alert(coin.coin_id, PriceAlert.INCOME_PRICE, alert_history):
+                    if should_send_alert(coin.coin_id, PriceAlert.INCOME_PRICE, alert_history, cooldown_hours):
                         percentage = ((current_price - income_based_price) / income_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
@@ -331,7 +341,7 @@ if __name__ == '__main__':
     logger.info("价格监控脚本启动")
     logger.info(f"SMTP服务器: {SMTP_SERVER}:{SMTP_PORT}")
     logger.info(f"接收邮箱: {ALERT_EMAIL if ALERT_EMAIL else '未配置'}")
-    logger.info(f"提醒冷却时间: {ALERT_COOLDOWN_HOURS} 小时")
+    logger.info(f"默认提醒冷却时间: {ALERT_COOLDOWN_HOURS} 小时（将从数据库读取实际设置）")
     logger.info("=" * 60)
     
     check_prices()

@@ -133,6 +133,43 @@ class Coin(db.Model):
     cexs = db.Column(db.Text)
     tags = db.Column(db.Text)
 
+
+class SystemSettings(db.Model):
+    """系统设置"""
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text)
+    description = db.Column(db.Text)
+    updated_at = db.Column(db.Float, default=time.time)
+    
+    @staticmethod
+    def get_setting(key, default=None):
+        """获取设置值"""
+        setting = SystemSettings.query.filter_by(key=key).first()
+        if setting:
+            return setting.value
+        return default
+    
+    @staticmethod
+    def set_setting(key, value, description=None):
+        """设置或更新设置值"""
+        setting = SystemSettings.query.filter_by(key=key).first()
+        if setting:
+            setting.value = str(value)
+            setting.updated_at = time.time()
+            if description:
+                setting.description = description
+        else:
+            setting = SystemSettings(
+                key=key,
+                value=str(value),
+                description=description,
+                updated_at=time.time()
+            )
+            db.session.add(setting)
+        db.session.commit()
+        return setting
+
 _coin_list_cache = {
     'ids': set(),
     'last_fetch_epoch': 0.0,
@@ -664,6 +701,41 @@ def api_coin_ids():
     resp = make_response(jsonify(popular))
     resp.headers['Cache-Control'] = 'public, max-age=3600'
     return resp
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+@require_admin
+def settings():
+    """系统设置页面"""
+    error_message = None
+    success_message = None
+    
+    if request.method == 'POST':
+        try:
+            # 获取价格提醒冷却时间
+            alert_cooldown = request.form.get('alert_cooldown_hours')
+            if alert_cooldown:
+                alert_cooldown_float = float(alert_cooldown)
+                if alert_cooldown_float in [0.5, 1, 2, 6, 12, 24]:
+                    SystemSettings.set_setting(
+                        'alert_cooldown_hours',
+                        str(alert_cooldown_float),
+                        '价格提醒冷却时间（小时）'
+                    )
+                    success_message = f'设置已保存：提醒冷却时间 {alert_cooldown_float} 小时'
+                else:
+                    error_message = '无效的冷却时间值'
+        except Exception as e:
+            error_message = f'保存设置失败: {e}'
+            db.session.rollback()
+    
+    # 获取当前设置
+    current_cooldown = SystemSettings.get_setting('alert_cooldown_hours', '24')
+    
+    return render_template('settings.html', 
+                         current_cooldown=current_cooldown,
+                         error=error_message,
+                         success=success_message)
 
 
 @app.route('/healthz')

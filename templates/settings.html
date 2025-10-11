@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - Crypto Tracker</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+            color: #1a202c;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        .nav-links {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .nav-links a {
+            display: inline-block;
+            padding: 8px 16px;
+            margin-right: 10px;
+            background: #4299e1;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .nav-links a:hover {
+            background: #3182ce;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 6px;
+            border-left: 4px solid #4299e1;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #2d3748;
+            font-size: 18px;
+        }
+        .section p {
+            color: #4a5568;
+            margin: 10px 0;
+        }
+        .form-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        select, input[type="number"] {
+            width: 100%;
+            max-width: 300px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #38a169;
+        }
+        .success {
+            background: #c6f6d5;
+            border: 1px solid #48bb78;
+            color: #22543d;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .error {
+            background: #fed7d7;
+            border: 1px solid #e53e3e;
+            color: #742a2a;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .info-box {
+            background: #bee3f8;
+            border-left: 4px solid #3182ce;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #2c5282;
+        }
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .info-box li {
+            margin: 5px 0;
+            color: #2d3748;
+        }
+        .current-value {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #4299e1;
+            color: white;
+            border-radius: 4px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/">首页</a>
+            <a href="/manage">管理代币</a>
+            <a href="/settings">系统设置</a>
+            <a href="/logout">退出登录</a>
+        </div>
+
+        <h1>⚙️ 系统设置</h1>
+
+        {% if success %}
+        <div class="success">{{ success }}</div>
+        {% endif %}
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <div class="section">
+            <h2>🚨 价格提醒设置</h2>
+            <p>配置价格监控系统的提醒冷却时间，避免短时间内收到重复提醒。</p>
+            
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                
+                <div class="form-group">
+                    <label for="alert_cooldown_hours">
+                        提醒冷却时间
+                        <span class="current-value">当前: {{ current_cooldown }} 小时</span>
+                    </label>
+                    <select name="alert_cooldown_hours" id="alert_cooldown_hours">
+                        <option value="0.5" {% if current_cooldown == '0.5' %}selected{% endif %}>0.5 小时（30分钟）</option>
+                        <option value="1" {% if current_cooldown == '1' %}selected{% endif %}>1 小时</option>
+                        <option value="2" {% if current_cooldown == '2' %}selected{% endif %}>2 小时</option>
+                        <option value="6" {% if current_cooldown == '6' %}selected{% endif %}>6 小时</option>
+                        <option value="12" {% if current_cooldown == '12' %}selected{% endif %}>12 小时</option>
+                        <option value="24" {% if current_cooldown == '24' %}selected{% endif %}>24 小时（默认）</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn">💾 保存设置</button>
+            </form>
+        </div>
+
+        <div class="info-box">
+            <h3>ℹ️ 提醒冷却时间说明</h3>
+            <ul>
+                <li><strong>作用</strong>：防止短时间内收到重复的价格提醒邮件</li>
+                <li><strong>工作原理</strong>：每个代币的每种提醒类型（融资价格/收入价格）单独计算冷却时间</li>
+                <li><strong>检查频率</strong>：系统仍然每10分钟检查一次所有代币价格</li>
+                <li><strong>邮件发送</strong>：只有超过冷却时间后才会再次发送邮件</li>
+            </ul>
+            
+            <h3>📊 推荐设置</h3>
+            <ul>
+                <li><strong>0.5小时</strong>：适合短线交易，快速响应价格变化</li>
+                <li><strong>1-2小时</strong>：适合活跃监控，及时了解价格动态</li>
+                <li><strong>6小时</strong>：适合日常监控，减少邮件数量</li>
+                <li><strong>12-24小时</strong>：适合长期监控，避免频繁提醒</li>
+            </ul>
+            
+            <h3>🔔 提醒示例</h3>
+            <p>假设设置冷却时间为<strong>2小时</strong>：</p>
+            <ul>
+                <li><strong>14:00</strong> - Portal代币低于融资价格，发送邮件 ✅</li>
+                <li><strong>14:10</strong> - Portal代币仍低于融资价格，不发送 ❌（冷却中）</li>
+                <li><strong>14:20</strong> - Portal代币仍低于融资价格，不发送 ❌（冷却中）</li>
+                <li><strong>16:00</strong> - Portal代币仍低于融资价格，不发送 ❌（还差1分钟）</li>
+                <li><strong>16:10</strong> - Portal代币仍低于融资价格，发送邮件 ✅（已过2小时）</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>📧 邮件配置信息</h2>
+            <p>当前邮件配置通过环境变量设置，如需修改请联系系统管理员。</p>
+            <ul>
+                <li>接收邮箱：402541430@qq.com</li>
+                <li>发送邮箱：974175678@qq.com</li>
+                <li>SMTP服务器：smtp.qq.com</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+
