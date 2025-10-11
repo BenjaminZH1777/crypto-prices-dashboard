@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, make_response
 from flask_sqlalchemy import SQLAlchemy
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from pycoingecko import CoinGeckoAPI
 from pathlib import Path
 from sqlalchemy import event
@@ -12,6 +14,14 @@ import logging
 import traceback
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+
+# 配置API限流
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -169,6 +179,22 @@ class SystemSettings(db.Model):
             db.session.add(setting)
         db.session.commit()
         return setting
+
+
+class AlertHistory(db.Model):
+    """价格提醒历史记录"""
+    id = db.Column(db.Integer, primary_key=True)
+    coin_id = db.Column(db.String(50), nullable=False, index=True)
+    coin_name = db.Column(db.String(100))
+    alert_type = db.Column(db.String(50), nullable=False)  # 'financing_price' or 'income_price'
+    current_price = db.Column(db.Float)
+    target_price = db.Column(db.Float)
+    price_diff = db.Column(db.Float)
+    price_diff_pct = db.Column(db.Float)
+    triggered_at = db.Column(db.Float, default=time.time, index=True)
+    email_sent = db.Column(db.Boolean, default=False)
+    email_error = db.Column(db.Text)
+
 
 _coin_list_cache = {
     'ids': set(),
@@ -577,6 +603,7 @@ def edit_coin(coin_db_id: int):
     return render_template('edit.html', coin=coin, error=error_message)
 
 @app.route('/api/data')
+@limiter.limit("60 per minute")
 def api_data():
     try:
         data_dict, last_epoch, ttl = get_cached_market_data(ttl_seconds=300)
@@ -654,6 +681,7 @@ def api_data():
         return make_response(jsonify({'error': 'Data temporarily unavailable', 'rows': []}), 503)
 
 @app.route('/api/prices')
+@limiter.limit("60 per minute")
 def api_prices():
     data_dict = fetch_market_data_for_configured_coins()
     coins = Coin.query.all()
@@ -703,6 +731,81 @@ def api_coin_ids():
     return resp
 
 
+@app.route('/batch-import', methods=['GET', 'POST'])
+@require_admin
+def batch_import():
+    """批量导入代币"""
+    error_message = None
+    success_message = None
+    
+    if request.method == 'POST':
+        csv_data = request.form.get('csv_data', '').strip()
+        if not csv_data:
+            error_message = "请输入CSV数据"
+        else:
+            try:
+                import csv
+                import io
+                
+                reader = csv.DictReader(io.StringIO(csv_data))
+                imported_count = 0
+                updated_count = 0
+                
+                for row in reader:
+                    coin_id = row.get('coin_id', '').strip()
+                    if not coin_id:
+                        continue
+                    
+                    # 解析数值字段
+                    def to_float(v):
+                        try:
+                            return float(v) if v and v.strip() else None
+                        except:
+                            return None
+                    
+                    # 检查代币是否已存在
+                    coin = Coin.query.filter_by(coin_id=coin_id).first()
+                    
+                    if coin:
+                        # 更新现有代币
+                        coin.found_raises = to_float(row.get('found_raises'))
+                        coin.investor_percentage = to_float(row.get('investor_percentage'))
+                        coin.financing_valuation = to_float(row.get('financing_valuation'))
+                        coin.annualized_income = to_float(row.get('annualized_income'))
+                        coin.income_valuation = to_float(row.get('income_valuation'))
+                        coin.tokenomics = row.get('tokenomics', '')
+                        coin.vesting = row.get('vesting', '')
+                        coin.cexs = row.get('cexs', '')
+                        coin.tags = row.get('tags', '')
+                        updated_count += 1
+                    else:
+                        # 添加新代币
+                        coin = Coin(
+                            coin_id=coin_id,
+                            found_raises=to_float(row.get('found_raises')),
+                            investor_percentage=to_float(row.get('investor_percentage')),
+                            financing_valuation=to_float(row.get('financing_valuation')),
+                            annualized_income=to_float(row.get('annualized_income')),
+                            income_valuation=to_float(row.get('income_valuation')),
+                            tokenomics=row.get('tokenomics', ''),
+                            vesting=row.get('vesting', ''),
+                            cexs=row.get('cexs', ''),
+                            tags=row.get('tags', '')
+                        )
+                        db.session.add(coin)
+                        imported_count += 1
+                
+                db.session.commit()
+                success_message = f"成功导入 {imported_count} 个新代币，更新 {updated_count} 个现有代币"
+                
+            except Exception as e:
+                db.session.rollback()
+                error_message = f"导入失败: {str(e)}"
+                app.logger.error(f"Batch import error: {e}", exc_info=True)
+    
+    return render_template('batch_import.html', error=error_message, success=success_message)
+
+
 @app.route('/settings', methods=['GET', 'POST'])
 @require_admin
 def settings():
@@ -732,8 +835,12 @@ def settings():
     # 获取当前设置
     current_cooldown = SystemSettings.get_setting('alert_cooldown_hours', '24')
     
+    # 获取最近50条提醒历史
+    alert_history = AlertHistory.query.order_by(AlertHistory.triggered_at.desc()).limit(50).all()
+    
     return render_template('settings.html', 
                          current_cooldown=current_cooldown,
+                         alert_history=alert_history,
                          error=error_message,
                          success=success_message)
 
@@ -778,6 +885,19 @@ def inject_version():
         "IS_ADMIN": bool(session.get('is_admin')),
         "ADMIN_USERNAME": session.get('admin_username'),
     }
+
+
+@app.template_filter('format_timestamp')
+def format_timestamp(timestamp):
+    """格式化时间戳为可读格式"""
+    if not timestamp:
+        return 'N/A'
+    try:
+        from datetime import datetime
+        dt = datetime.fromtimestamp(timestamp)
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except:
+        return str(timestamp)
 
 
     

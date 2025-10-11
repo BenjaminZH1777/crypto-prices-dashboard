@@ -224,7 +224,72 @@
                 <li>SMTP服务器：smtp.qq.com</li>
             </ul>
         </div>
+
+        <div class="section">
+            <h2>📜 提醒历史记录（最近50条）</h2>
+            {% if alert_history and alert_history|length > 0 %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <thead>
+                        <tr style="background: #f7fafc; border-bottom: 2px solid #cbd5e0;">
+                            <th style="padding: 10px; text-align: left;">时间</th>
+                            <th style="padding: 10px; text-align: left;">代币</th>
+                            <th style="padding: 10px; text-align: left;">提醒类型</th>
+                            <th style="padding: 10px; text-align: right;">当前价格</th>
+                            <th style="padding: 10px; text-align: right;">目标价格</th>
+                            <th style="padding: 10px; text-align: right;">价差</th>
+                            <th style="padding: 10px; text-align: center;">邮件</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in alert_history %}
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 8px;">
+                                {{ alert.triggered_at | format_timestamp }}
+                            </td>
+                            <td style="padding: 8px; font-weight: 600;">
+                                {{ alert.coin_name or alert.coin_id }}
+                            </td>
+                            <td style="padding: 8px;">
+                                {% if alert.alert_type == 'financing_price' %}
+                                <span style="background: #fbb6ce; color: #97266d; padding: 2px 8px; border-radius: 3px; font-size: 12px;">融资价格</span>
+                                {% else %}
+                                <span style="background: #d6bcfa; color: #553c9a; padding: 2px 8px; border-radius: 3px; font-size: 12px;">收入价格</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #e53e3e;">
+                                ${{ "%.6f" | format(alert.current_price) if alert.current_price else 'N/A' }}
+                            </td>
+                            <td style="padding: 8px; text-align: right;">
+                                ${{ "%.6f" | format(alert.target_price) if alert.target_price else 'N/A' }}
+                            </td>
+                            <td style="padding: 8px; text-align: right; color: {% if alert.price_diff_pct < 0 %}#e53e3e{% else %}#666{% endif %};">
+                                {{ "%.2f" | format(alert.price_diff_pct) if alert.price_diff_pct else 'N/A' }}%
+                            </td>
+                            <td style="padding: 8px; text-align: center;">
+                                {% if alert.email_sent %}
+                                <span style="color: #48bb78;">✓</span>
+                                {% else %}
+                                <span style="color: #e53e3e;" title="{{ alert.email_error or '未发送' }}">✗</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color: #718096; padding: 20px; text-align: center;">暂无提醒历史记录</p>
+            {% endif %}
+        </div>
     </div>
+
+    <script>
+        // 格式化时间戳为可读格式（在前端处理）
+        document.addEventListener('DOMContentLoaded', function() {
+            // 时间已经在后端格式化，这里不需要额外处理
+        });
+    </script>
 </body>
 </html>
 

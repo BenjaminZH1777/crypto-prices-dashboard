@@ -18,18 +18,29 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-from app import app, db, Coin, SystemSettings, get_cached_market_data
+from app import app, db, Coin, SystemSettings, AlertHistory, get_cached_market_data
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(BASE_DIR / 'price_monitor.log'),
-        logging.StreamHandler()
-    ]
+# 配置日志（带轮转）
+from logging.handlers import RotatingFileHandler
+
+# 创建日志处理器
+file_handler = RotatingFileHandler(
+    BASE_DIR / 'price_monitor.log',
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=5,
+    encoding='utf-8'
 )
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 # 邮件配置（使用环境变量）
 SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
@@ -321,14 +332,45 @@ def check_prices():
             # 发送提醒邮件
             if alerts_to_send:
                 subject, body = create_alert_email(alerts_to_send)
-                if send_email(subject, body):
-                    # 更新提醒历史
-                    current_time = time.time()
+                email_sent = send_email(subject, body)
+                email_error = None if email_sent else "邮件发送失败"
+                
+                # 保存提醒历史到数据库和文件
+                current_time = time.time()
+                for alert in alerts_to_send:
+                    # 保存到数据库
+                    try:
+                        alert_record = AlertHistory(
+                            coin_id=alert['coin_id'],
+                            coin_name=alert['coin_name'],
+                            alert_type=alert['type'],
+                            current_price=alert['current_price'],
+                            target_price=alert['target_price'],
+                            price_diff=alert['current_price'] - alert['target_price'],
+                            price_diff_pct=alert['percentage'],
+                            triggered_at=current_time,
+                            email_sent=email_sent,
+                            email_error=email_error
+                        )
+                        db.session.add(alert_record)
+                    except Exception as e:
+                        logger.error(f"保存提醒历史到数据库失败: {e}")
+                
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    logger.error(f"提交数据库事务失败: {e}")
+                    db.session.rollback()
+                
+                # 更新文件历史（用于冷却检查）
+                if email_sent:
                     for alert in alerts_to_send:
                         key = f"{alert['coin_id']}_{alert['type']}"
                         alert_history[key] = current_time
                     save_alert_history(alert_history)
                     logger.info(f"发送了 {len(alerts_to_send)} 个价格提醒")
+                else:
+                    logger.warning(f"检测到 {len(alerts_to_send)} 个提醒，但邮件发送失败")
             else:
                 logger.info("没有需要发送的提醒")
                 

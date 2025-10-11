@@ -202,9 +202,63 @@
             font-size: 12px;
         }
         
+        /* 移动端卡片视图 */
+        .mobile-cards {
+            display: none;
+        }
+        
+        .coin-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .coin-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .coin-card-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .coin-card-price {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--success-color);
+        }
+        
+        .coin-card-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .coin-card-label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        
+        .coin-card-value {
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
         /* 移动端优化 */
         @media (max-width: 768px) {
             body { padding: 12px; }
+            
+            /* 在小屏幕上隐藏表格，显示卡片 */
+            .table-container { display: none; }
+            .mobile-cards { display: block; }
             
             .topbar { 
                 flex-direction: column; 
@@ -529,6 +583,10 @@
             <button id="export-btn" class="export-btn" title="导出数据">📊 导出</button>
         </div>
     </div>
+    <!-- 移动端卡片视图 -->
+    <div class="mobile-cards" id="mobile-cards"></div>
+    
+    <!-- 桌面端表格视图 -->
     <div class="table-container">
         <table id="token-table">
             <thead>

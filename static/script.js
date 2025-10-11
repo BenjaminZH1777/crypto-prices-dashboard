@@ -153,11 +153,21 @@ function applyFilters() {
 }
 
 function renderTable(data) {
+    // 桌面端表格渲染
     var tbody = document.querySelector('#token-table tbody');
     tbody.innerHTML = '';
+    
+    // 移动端卡片渲染
+    var mobileCards = document.querySelector('#mobile-cards');
+    if (mobileCards) {
+        mobileCards.innerHTML = '';
+    }
 
     if (data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 20px; color: var(--text-muted);">没有找到匹配的数据</td></tr>';
+        if (mobileCards) {
+            mobileCards.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">没有找到匹配的数据</div>';
+        }
         return;
     }
 
@@ -248,6 +258,39 @@ function renderTable(data) {
             <td title="${orElse(r.tags, '')}">${truncateText(orElse(r.tags, ''), 15)}</td>
         `;
         tbody.appendChild(row);
+        
+        // 同时渲染移动端卡片
+        if (mobileCards) {
+            var card = document.createElement('div');
+            card.className = 'coin-card';
+            card.innerHTML = `
+                <div class="coin-card-header">
+                    <div class="coin-card-name">${orElse(r.coin_name, '-')}</div>
+                    <div class="coin-card-price">${(r.price != null && !isNaN(r.price)) ? ('$' + Number(r.price).toFixed(6)) : '-'}</div>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">24h变化</span>
+                    <span class="coin-card-value">${fmtPercent(r.pct_24h)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">7d变化</span>
+                    <span class="coin-card-value">${fmtPercent(r.pct_7d)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">流通市值</span>
+                    <span class="coin-card-value">${fmtMoney(r.current_market_cap)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">融资价格</span>
+                    <span class="coin-card-value" style="${fbpStyle}">${fmtMoney(r.financing_based_price)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">收入价格</span>
+                    <span class="coin-card-value" style="${ibpStyle}">${fmtMoney(r.income_based_price)}</span>
+                </div>
+            `;
+            mobileCards.appendChild(card);
+        }
     });
 }
 
