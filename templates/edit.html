@@ -42,8 +42,9 @@
         <textarea name="cexs">{{ coin.cexs }}</textarea><br>
         <label for="tags">Tags:</label>
         <textarea name="tags">{{ coin.tags }}</textarea><br>
+        <label for="listing_date">上市日期:</label>
+        <input type="date" name="listing_date" id="listing_date" value="{{ coin.listing_date or '' }}"><br>
         <input type="submit" value="Save Changes">
     </form>
 </body>
 </html>
-

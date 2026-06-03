@@ -11,7 +11,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 # 添加项目路径到Python路径
@@ -55,12 +55,18 @@ ALERT_COOLDOWN_HOURS = 24  # 默认值
 
 # 提醒记录存储
 ALERT_HISTORY_FILE = BASE_DIR / 'alert_history.txt'
+ALERT_HISTORY_SEPARATOR = '\t'
 
 
 class PriceAlert:
     """价格提醒类型"""
     FINANCING_PRICE = 'financing_price'
     INCOME_PRICE = 'income_price'
+
+
+def alert_history_key(coin_id, alert_type):
+    """Build a cooldown key without relying on underscores in either field."""
+    return f"{coin_id}{ALERT_HISTORY_SEPARATOR}{alert_type}"
 
 
 def load_alert_history():
@@ -73,8 +79,15 @@ def load_alert_history():
                     parts = line.strip().split('|')
                     if len(parts) == 3:
                         coin_id, alert_type, timestamp = parts
-                        key = f"{coin_id}_{alert_type}"
-                        history[key] = float(timestamp)
+                        # Older versions accidentally wrote keys such as
+                        # bitcoin_financing|price|... because alert types contain underscores.
+                        if alert_type == 'price' and coin_id.endswith('_financing'):
+                            coin_id = coin_id[:-len('_financing')]
+                            alert_type = PriceAlert.FINANCING_PRICE
+                        elif alert_type == 'price' and coin_id.endswith('_income'):
+                            coin_id = coin_id[:-len('_income')]
+                            alert_type = PriceAlert.INCOME_PRICE
+                        history[alert_history_key(coin_id, alert_type)] = float(timestamp)
         except Exception as e:
             logger.error(f"加载提醒历史失败: {e}")
     return history
@@ -85,7 +98,10 @@ def save_alert_history(history):
     try:
         with open(ALERT_HISTORY_FILE, 'w') as f:
             for key, timestamp in history.items():
-                coin_id, alert_type = key.rsplit('_', 1)
+                if ALERT_HISTORY_SEPARATOR in key:
+                    coin_id, alert_type = key.split(ALERT_HISTORY_SEPARATOR, 1)
+                else:
+                    coin_id, alert_type = key.rsplit('_', 1)
                 f.write(f"{coin_id}|{alert_type}|{timestamp}\n")
     except Exception as e:
         logger.error(f"保存提醒历史失败: {e}")
@@ -93,7 +109,7 @@ def save_alert_history(history):
 
 def should_send_alert(coin_id, alert_type, history, cooldown_hours):
     """判断是否应该发送提醒（检查冷却时间）"""
-    key = f"{coin_id}_{alert_type}"
+    key = alert_history_key(coin_id, alert_type)
     if key not in history:
         return True
     
@@ -102,6 +118,28 @@ def should_send_alert(coin_id, alert_type, history, cooldown_hours):
     hours_passed = time_passed / 3600
     
     return hours_passed >= cooldown_hours
+
+
+def should_send_alert_from_db(coin_id, alert_type, cooldown_hours):
+    """Use database alert history as the cooldown source of truth."""
+    try:
+        latest = (
+            AlertHistory.query
+            .filter_by(coin_id=coin_id, alert_type=alert_type, email_sent=True)
+            .order_by(AlertHistory.triggered_at.desc())
+            .first()
+        )
+        if latest and latest.triggered_at:
+            hours_passed = (time.time() - latest.triggered_at) / 3600
+            return hours_passed >= cooldown_hours
+    except Exception as e:
+        logger.error(f"读取数据库提醒冷却失败: {e}", exc_info=True)
+
+    # Legacy fallback: preserve cooldowns created by older versions that used alert_history.txt.
+    history = load_alert_history()
+    if history:
+        return should_send_alert(coin_id, alert_type, history, cooldown_hours)
+    return True
 
 
 def send_email(subject, body_html):
@@ -260,8 +298,6 @@ def check_prices():
                 logger.info("没有配置代币，跳过检查")
                 return
             
-            # 加载提醒历史
-            alert_history = load_alert_history()
             alerts_to_send = []
             
             for coin in coins:
@@ -303,7 +339,7 @@ def check_prices():
                 
                 # 检查融资价格
                 if financing_based_price and current_price < financing_based_price:
-                    if should_send_alert(coin.coin_id, PriceAlert.FINANCING_PRICE, alert_history, cooldown_hours):
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.FINANCING_PRICE, cooldown_hours):
                         percentage = ((current_price - financing_based_price) / financing_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
@@ -317,7 +353,7 @@ def check_prices():
                 
                 # 检查收入价格
                 if income_based_price and current_price < income_based_price:
-                    if should_send_alert(coin.coin_id, PriceAlert.INCOME_PRICE, alert_history, cooldown_hours):
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.INCOME_PRICE, cooldown_hours):
                         percentage = ((current_price - income_based_price) / income_based_price) * 100
                         alerts_to_send.append({
                             'coin_id': coin.coin_id,
@@ -362,10 +398,11 @@ def check_prices():
                     logger.error(f"提交数据库事务失败: {e}")
                     db.session.rollback()
                 
-                # 更新文件历史（用于冷却检查）
+                # 更新旧版文件历史，方便回滚或排查；冷却判断以数据库为准。
                 if email_sent:
+                    alert_history = load_alert_history()
                     for alert in alerts_to_send:
-                        key = f"{alert['coin_id']}_{alert['type']}"
+                        key = alert_history_key(alert['coin_id'], alert['type'])
                         alert_history[key] = current_time
                     save_alert_history(alert_history)
                     logger.info(f"发送了 {len(alerts_to_send)} 个价格提醒")
@@ -389,4 +426,3 @@ if __name__ == '__main__':
     check_prices()
     
     logger.info("价格监控脚本执行完成")
-

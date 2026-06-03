@@ -12,6 +12,7 @@ import time
 import requests
 import logging
 import traceback
+from urllib.parse import urlsplit
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -81,17 +82,13 @@ def ensure_schema_migrations() -> None:
         if 'tags' not in names:
             db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
             db.session.commit()
+        if 'listing_date' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN listing_date TEXT"))
+            db.session.commit()
     except Exception:
         db.session.rollback()
         # ignore
         pass
-
-try:
-    with app.app_context():
-        db.create_all()
-        ensure_schema_migrations()
-except Exception:
-    pass
 
 
 # --------------------------- Login throttling ---------------------------
@@ -142,6 +139,7 @@ class Coin(db.Model):
     vesting = db.Column(db.Text)
     cexs = db.Column(db.Text)
     tags = db.Column(db.Text)
+    listing_date = db.Column(db.String(20))
 
 
 class SystemSettings(db.Model):
@@ -194,6 +192,14 @@ class AlertHistory(db.Model):
     triggered_at = db.Column(db.Float, default=time.time, index=True)
     email_sent = db.Column(db.Boolean, default=False)
     email_error = db.Column(db.Text)
+
+
+try:
+    with app.app_context():
+        db.create_all()
+        ensure_schema_migrations()
+except Exception:
+    app.logger.exception("Database initialization failed during app import")
 
 
 _coin_list_cache = {
@@ -328,6 +334,23 @@ def resolve_coingecko_id(user_input: str) -> str:
     return entered
 
 
+def parse_optional_float(value):
+    """Parse user-entered numeric fields without turning bad input into 500s."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_safe_redirect_target(target: str) -> bool:
+    if not target:
+        return False
+    parsed = urlsplit(target)
+    return not parsed.scheme and not parsed.netloc and target.startswith('/')
+
+
 # --------------------------- Admin auth helpers ---------------------------
 def _verify_admin_credentials(username: str, password: str) -> bool:
     try:
@@ -376,7 +399,7 @@ def _validate_csrf() -> bool:
     if request.method != 'POST':
         return True
     # Only protect HTML form endpoints
-    protected_endpoints = {'manage', 'edit_coin', 'delete_coin', 'login'}
+    protected_endpoints = {'manage', 'edit_coin', 'delete_coin', 'login', 'batch_import', 'settings'}
     if request.endpoint not in protected_endpoints:
         return True
     sent = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
@@ -440,6 +463,8 @@ def login():
                 except Exception:
                     db.session.rollback()
             dest = request.args.get('next') or url_for('manage')
+            if not _is_safe_redirect_target(dest):
+                dest = url_for('manage')
             return redirect(dest)
 
         # Failure path: record attempts and maybe lock
@@ -475,22 +500,20 @@ def manage():
     if request.method == 'POST':
         coin_id = (request.form.get('coin_id') or '').strip()
 
-        def to_float(v):
-            return float(v) if v not in (None, "") else None
-
-        buy_price = to_float(request.form.get('buy_price'))
-        amount = to_float(request.form.get('amount'))
-        found_raises = to_float(request.form.get('found_raises'))
-        investor_percentage = to_float(request.form.get('investor_percentage'))
-        financing_valuation = to_float(request.form.get('financing_valuation'))
-        financing_based_price = to_float(request.form.get('financing_based_price'))
-        annualized_income = to_float(request.form.get('annualized_income'))
-        income_valuation = to_float(request.form.get('income_valuation'))
-        income_based_price = to_float(request.form.get('income_based_price'))
+        buy_price = parse_optional_float(request.form.get('buy_price'))
+        amount = parse_optional_float(request.form.get('amount'))
+        found_raises = parse_optional_float(request.form.get('found_raises'))
+        investor_percentage = parse_optional_float(request.form.get('investor_percentage'))
+        financing_valuation = parse_optional_float(request.form.get('financing_valuation'))
+        financing_based_price = parse_optional_float(request.form.get('financing_based_price'))
+        annualized_income = parse_optional_float(request.form.get('annualized_income'))
+        income_valuation = parse_optional_float(request.form.get('income_valuation'))
+        income_based_price = parse_optional_float(request.form.get('income_based_price'))
         tokenomics = request.form.get('tokenomics', '')
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
+        listing_date = request.form.get('listing_date', '')
 
         # Try to resolve friendly inputs (e.g., names/symbols) to a real CoinGecko id
         resolved_id = resolve_coingecko_id(coin_id)
@@ -501,7 +524,7 @@ def manage():
         if valid_ids and resolved_id not in valid_ids:
             error_message = f"无效的 CoinGecko 代币ID: {coin_id}"
         else:
-            coin = Coin.query.filter_by(coin_id=coin_id).first()
+            coin = Coin.query.filter_by(coin_id=resolved_id).first()
             if coin:
                 coin.buy_price = buy_price
                 coin.amount = amount
@@ -516,6 +539,7 @@ def manage():
                 coin.vesting = vesting
                 coin.cexs = cexs
                 coin.tags = tags
+                coin.listing_date = listing_date
             else:
                 coin = Coin(
                     coin_id=resolved_id,
@@ -531,7 +555,8 @@ def manage():
                     tokenomics=tokenomics,
                     vesting=vesting,
                     cexs=cexs,
-                    tags=tags
+                    tags=tags,
+                    listing_date=listing_date
                 )
                 db.session.add(coin)
             try:
@@ -542,6 +567,7 @@ def manage():
             else:
                 return redirect(url_for('manage'))
 
+    _get_or_create_csrf_token()
     coins = Coin.query.all()
     return render_template('manage.html', coins=coins, error=error_message)
 
@@ -556,22 +582,20 @@ def edit_coin(coin_db_id: int):
     if request.method == 'POST':
         new_coin_id = (request.form.get('coin_id') or '').strip()
 
-        def to_float(v):
-            return float(v) if v not in (None, "") else None
-
-        buy_price = to_float(request.form.get('buy_price'))
-        amount = to_float(request.form.get('amount'))
-        found_raises = to_float(request.form.get('found_raises'))
-        investor_percentage = to_float(request.form.get('investor_percentage'))
-        financing_valuation = to_float(request.form.get('financing_valuation'))
-        financing_based_price = to_float(request.form.get('financing_based_price'))
-        annualized_income = to_float(request.form.get('annualized_income'))
-        income_valuation = to_float(request.form.get('income_valuation'))
-        income_based_price = to_float(request.form.get('income_based_price'))
+        buy_price = parse_optional_float(request.form.get('buy_price'))
+        amount = parse_optional_float(request.form.get('amount'))
+        found_raises = parse_optional_float(request.form.get('found_raises'))
+        investor_percentage = parse_optional_float(request.form.get('investor_percentage'))
+        financing_valuation = parse_optional_float(request.form.get('financing_valuation'))
+        financing_based_price = parse_optional_float(request.form.get('financing_based_price'))
+        annualized_income = parse_optional_float(request.form.get('annualized_income'))
+        income_valuation = parse_optional_float(request.form.get('income_valuation'))
+        income_based_price = parse_optional_float(request.form.get('income_based_price'))
         tokenomics = request.form.get('tokenomics', '')
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
+        listing_date = request.form.get('listing_date', '')
 
         resolved_id = resolve_coingecko_id(new_coin_id)
         valid_ids = get_valid_coin_ids_set()
@@ -592,6 +616,7 @@ def edit_coin(coin_db_id: int):
             coin.vesting = vesting
             coin.cexs = cexs
             coin.tags = tags
+            coin.listing_date = listing_date
             try:
                 db.session.commit()
             except Exception as e:
@@ -600,6 +625,7 @@ def edit_coin(coin_db_id: int):
             else:
                 return redirect(url_for('manage'))
 
+    _get_or_create_csrf_token()
     return render_template('edit.html', coin=coin, error=error_message)
 
 @app.route('/api/data')
@@ -653,6 +679,7 @@ def api_data():
                 'vesting': coin.vesting,
                 'cexs': coin.cexs,
                 'tags': coin.tags,
+                'listing_date': coin.listing_date,
             }
             table_data.append(table_row)
         # Include cache metadata so UI can show last/next refresh
@@ -707,10 +734,9 @@ def api_prices():
     resp.headers['Cache-Control'] = 'public, max-age=30'
     return resp
 
-@app.route('/manage/delete/<int:coin_db_id>', methods=['POST', 'GET'])
+@app.route('/manage/delete/<int:coin_db_id>', methods=['POST'])
 @require_admin
 def delete_coin(coin_db_id: int):
-    # Support both POST (form) and GET (direct link) to reduce 405/500 issues behind some proxies
     try:
         coin = db.session.get(Coin, coin_db_id)
         if coin:
@@ -752,16 +778,19 @@ def batch_import():
                 updated_count = 0
                 
                 for row in reader:
-                    coin_id = row.get('coin_id', '').strip()
-                    if not coin_id:
+                    raw_coin_id = row.get('coin_id', '').strip()
+                    if not raw_coin_id:
+                        continue
+
+                    coin_id = resolve_coingecko_id(raw_coin_id)
+                    valid_ids = get_valid_coin_ids_set()
+                    if valid_ids and coin_id not in valid_ids:
+                        app.logger.warning("Skipping invalid CoinGecko id during import: %s", raw_coin_id)
                         continue
                     
                     # 解析数值字段
                     def to_float(v):
-                        try:
-                            return float(v) if v and v.strip() else None
-                        except:
-                            return None
+                        return parse_optional_float(v.strip() if isinstance(v, str) else v)
                     
                     # 检查代币是否已存在
                     coin = Coin.query.filter_by(coin_id=coin_id).first()
@@ -777,6 +806,7 @@ def batch_import():
                         coin.vesting = row.get('vesting', '')
                         coin.cexs = row.get('cexs', '')
                         coin.tags = row.get('tags', '')
+                        coin.listing_date = row.get('listing_date', '')
                         updated_count += 1
                     else:
                         # 添加新代币
@@ -790,7 +820,8 @@ def batch_import():
                             tokenomics=row.get('tokenomics', ''),
                             vesting=row.get('vesting', ''),
                             cexs=row.get('cexs', ''),
-                            tags=row.get('tags', '')
+                            tags=row.get('tags', ''),
+                            listing_date=row.get('listing_date', '')
                         )
                         db.session.add(coin)
                         imported_count += 1
@@ -803,6 +834,7 @@ def batch_import():
                 error_message = f"导入失败: {str(e)}"
                 app.logger.error(f"Batch import error: {e}", exc_info=True)
     
+    _get_or_create_csrf_token()
     return render_template('batch_import.html', error=error_message, success=success_message)
 
 
@@ -832,15 +864,24 @@ def settings():
             error_message = f'保存设置失败: {e}'
             db.session.rollback()
     
+    _get_or_create_csrf_token()
+
     # 获取当前设置
     current_cooldown = SystemSettings.get_setting('alert_cooldown_hours', '24')
     
     # 获取最近50条提醒历史
     alert_history = AlertHistory.query.order_by(AlertHistory.triggered_at.desc()).limit(50).all()
     
+    email_config = {
+        'alert_email': os.environ.get('ALERT_EMAIL', '未配置'),
+        'smtp_username': os.environ.get('SMTP_USERNAME', '未配置'),
+        'smtp_server': os.environ.get('SMTP_SERVER', '未配置'),
+    }
+
     return render_template('settings.html', 
                          current_cooldown=current_cooldown,
                          alert_history=alert_history,
+                         email_config=email_config,
                          error=error_message,
                          success=success_message)
 
@@ -917,6 +958,10 @@ def startup_health_check():
                 names = {c[1] for c in cols}
                 if 'tags' not in names:
                     db.session.execute(text("ALTER TABLE coin ADD COLUMN tags TEXT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'listing_date' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN listing_date TEXT"))
                     db.session.commit()
                     app.logger.info("Database schema updated")
             except Exception as e:

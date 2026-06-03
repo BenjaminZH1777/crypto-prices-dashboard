@@ -219,9 +219,9 @@
             <h2>📧 邮件配置信息</h2>
             <p>当前邮件配置通过环境变量设置，如需修改请联系系统管理员。</p>
             <ul>
-                <li>接收邮箱：402541430@qq.com</li>
-                <li>发送邮箱：974175678@qq.com</li>
-                <li>SMTP服务器：smtp.qq.com</li>
+                <li>接收邮箱：{{ email_config.alert_email }}</li>
+                <li>发送邮箱：{{ email_config.smtp_username }}</li>
+                <li>SMTP服务器：{{ email_config.smtp_server }}</li>
             </ul>
         </div>
 
@@ -292,4 +292,3 @@
     </script>
 </body>
 </html>
-

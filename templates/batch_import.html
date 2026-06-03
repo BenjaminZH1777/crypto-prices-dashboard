@@ -103,13 +103,13 @@
             <h3>📋 CSV格式说明</h3>
             <p>请按以下格式准备CSV数据，第一行为表头（必须）：</p>
             <code>
-coin_id,found_raises,investor_percentage,financing_valuation,annualized_income,income_valuation,tokenomics,vesting,cexs,tags
+coin_id,found_raises,investor_percentage,financing_valuation,annualized_income,income_valuation,tokenomics,vesting,cexs,tags,listing_date
             </code>
             <br><br>
             <p><strong>示例：</strong></p>
             <code>
-bitcoin,0,0,0,0,0,"BTC tokenomics","No vesting","Binance,OKX","BTC,Layer1"<br>
-ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1"
+bitcoin,0,0,0,0,0,"BTC tokenomics","No vesting","Binance,OKX","BTC,Layer1",2009-01-03<br>
+ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1",2015-07-30
             </code>
             <br><br>
             <p><strong>字段说明：</strong></p>
@@ -124,6 +124,7 @@ ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1"
                 <li><code>vesting</code>: 锁仓信息</li>
                 <li><code>cexs</code>: 交易所</li>
                 <li><code>tags</code>: 标签</li>
+                <li><code>listing_date</code>: 上市日期，建议格式 YYYY-MM-DD</li>
             </ul>
         </div>
 
@@ -132,7 +133,7 @@ ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1"
             
             <label for="csv_data"><strong>粘贴CSV数据：</strong></label>
             <textarea name="csv_data" id="csv_data" placeholder="coin_id,found_raises,investor_percentage,...
-bitcoin,0,0,0,0,0,&quot;BTC tokenomics&quot;,&quot;No vesting&quot;,&quot;Binance&quot;,&quot;BTC,Layer1&quot;"></textarea>
+bitcoin,0,0,0,0,0,&quot;BTC tokenomics&quot;,&quot;No vesting&quot;,&quot;Binance&quot;,&quot;BTC,Layer1&quot;,2009-01-03"></textarea>
             
             <div style="margin-top: 15px;">
                 <button type="submit" class="btn">📥 导入数据</button>
@@ -153,4 +154,3 @@ bitcoin,0,0,0,0,0,&quot;BTC tokenomics&quot;,&quot;No vesting&quot;,&quot;Binanc
     </div>
 </body>
 </html>
-

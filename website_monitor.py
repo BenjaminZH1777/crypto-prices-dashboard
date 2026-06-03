@@ -14,16 +14,16 @@ import json
 import os
 
 # 配置
-MONITOR_URL = "https://retailgo2048.com/healthz"
-WEBSITE_URL = "https://retailgo2048.com"
-CHECK_INTERVAL = 300  # 5分钟检查一次（秒）
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://retailgo2048.com")
+MONITOR_URL = os.environ.get("MONITOR_URL", f"{WEBSITE_URL.rstrip('/')}/healthz")
+CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "300"))  # 5分钟检查一次（秒）
 
-# 邮件配置（使用相同的QQ邮箱）
-SMTP_SERVER = "smtp.qq.com"
-SMTP_PORT = 465
-SMTP_USERNAME = "974175678@qq.com"
-SMTP_PASSWORD = "kbaavprrjbcvbgaa"
-ALERT_EMAIL = "402541430@qq.com"
+# 邮件配置。请通过环境变量配置，避免把邮箱授权码提交到仓库。
+SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.qq.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "")
 
 # 告警阈值
 TIMEOUT_THRESHOLD = 10  # 超时阈值（秒）
@@ -69,6 +69,10 @@ class WebsiteMonitor:
     
     def send_alert(self, subject, body):
         """发送告警邮件"""
+        if not ALERT_EMAIL or not SMTP_USERNAME or not SMTP_PASSWORD:
+            print("⚠️ 邮件配置未完成，跳过发送告警邮件")
+            return False
+
         try:
             msg = MIMEMultipart()
             msg['Subject'] = subject
@@ -239,4 +243,3 @@ if __name__ == '__main__':
     else:
         # 持续监控模式
         monitor.run_continuous()
-

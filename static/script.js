@@ -95,6 +95,22 @@ function updateSortIndicators() {
     }
 }
 
+function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+        return ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[ch];
+    });
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value);
+}
+
 // 搜索和过滤功能
 function applyFilters() {
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
@@ -164,7 +180,7 @@ function renderTable(data) {
     }
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 20px; color: var(--text-muted);">没有找到匹配的数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="21" style="text-align: center; padding: 20px; color: var(--text-muted);">没有找到匹配的数据</td></tr>';
         if (mobileCards) {
             mobileCards.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">没有找到匹配的数据</div>';
         }
@@ -218,44 +234,54 @@ function renderTable(data) {
         // 移动端友好的文本截断
         var truncateText = function(text, maxLength) {
             if (!text) return '';
+            text = String(text);
             if (text.length <= maxLength) return text;
             return text.substring(0, maxLength) + '...';
         };
+
+        var coinName = orElse(r.coin_name, '-');
+        var coinId = orElse(r.coin_id, '');
+        var tokenomics = orElse(r.tokenomics, '');
+        var vesting = orElse(r.vesting, '');
+        var cexs = orElse(r.cexs, '');
+        var tags = orElse(r.tags, '');
+        var listingDate = orElse(r.listing_date, '');
         
         row.innerHTML = `
             <td class="important-col">${idx + 1}</td>
             <td class="important-col">
-                <a href="https://www.coingecko.com/en/coins/${encodeURIComponent(r.coin_id || '')}" 
+                <a href="https://www.coingecko.com/en/coins/${encodeURIComponent(coinId)}"
                    target="_blank" rel="noopener" 
-                   title="${orElse(r.coin_name, '-')}">
-                    ${truncateText(orElse(r.coin_name, '-'), 15)}
+                   title="${escapeAttr(coinName)}">
+                    ${escapeHtml(truncateText(coinName, 15))}
                 </a>
             </td>
-            <td class="price-col important-col" style="${priceVal ? 'font-weight: bold;' : ''}">
+            <td>${escapeHtml(listingDate || '-')}</td>
+            <td class="price-col important-col" style="${priceVal != null ? 'font-weight: bold;' : ''}">
                 ${(r.price != null && !isNaN(r.price)) ? ('$' + Number(r.price).toFixed(6)) : '-'}
             </td>
             <td>${fmtPercent(r.pct_24h)}</td>
             <td>${fmtPercent(r.pct_7d)}</td>
-            <td title="${orElse(r.current_supply, '-')}">${fmtNumber(r.current_supply)}</td>
-            <td title="${orElse(r.current_market_cap, '-')}">${fmtMoney(r.current_market_cap)}</td>
-            <td title="${orElse(r.total_supply, '-')}">${fmtNumber(r.total_supply)}</td>
-            <td title="${orElse(r.total_market_cap, '-')}">${fmtMoney(r.total_market_cap)}</td>
+            <td title="${escapeAttr(orElse(r.current_supply, '-'))}">${fmtNumber(r.current_supply)}</td>
+            <td title="${escapeAttr(orElse(r.current_market_cap, '-'))}">${fmtMoney(r.current_market_cap)}</td>
+            <td title="${escapeAttr(orElse(r.total_supply, '-'))}">${fmtNumber(r.total_supply)}</td>
+            <td title="${escapeAttr(orElse(r.total_market_cap, '-'))}">${fmtMoney(r.total_market_cap)}</td>
             <td>
-                <a href="https://cryptorank.io/ico/${encodeURIComponent(r.coin_id || '')}" 
+                <a href="https://cryptorank.io/ico/${encodeURIComponent(coinId)}"
                    target="_blank" rel="noopener">
                     ${fmtMoney(r.found_raises)}
                 </a>
             </td>
             <td>${fmtPercent(r.investor_percentage)}</td>
-            <td title="${orElse(r.financing_valuation, '-')}">${fmtMoney(r.financing_valuation)}</td>
+            <td title="${escapeAttr(orElse(r.financing_valuation, '-'))}">${fmtMoney(r.financing_valuation)}</td>
             <td class="price-col" style="${fbpStyle}">${fmtMoney(r.financing_based_price)}</td>
-            <td title="${orElse(r.annualized_income, '-')}">${fmtMoney(r.annualized_income)}</td>
-            <td title="${orElse(r.income_valuation, '-')}">${fmtMoney(r.income_valuation)}</td>
+            <td title="${escapeAttr(orElse(r.annualized_income, '-'))}">${fmtMoney(r.annualized_income)}</td>
+            <td title="${escapeAttr(orElse(r.income_valuation, '-'))}">${fmtMoney(r.income_valuation)}</td>
             <td class="price-col" style="${ibpStyle}">${fmtMoney(r.income_based_price)}</td>
-            <td title="${orElse(r.tokenomics, '')}">${truncateText(orElse(r.tokenomics, ''), 20)}</td>
-            <td title="${orElse(r.vesting, '')}">${truncateText(orElse(r.vesting, ''), 20)}</td>
-            <td title="${orElse(r.cexs, '')}">${truncateText(orElse(r.cexs, ''), 15)}</td>
-            <td title="${orElse(r.tags, '')}">${truncateText(orElse(r.tags, ''), 15)}</td>
+            <td title="${escapeAttr(tokenomics)}">${escapeHtml(truncateText(tokenomics, 20))}</td>
+            <td title="${escapeAttr(vesting)}">${escapeHtml(truncateText(vesting, 20))}</td>
+            <td title="${escapeAttr(cexs)}">${escapeHtml(truncateText(cexs, 15))}</td>
+            <td title="${escapeAttr(tags)}">${escapeHtml(truncateText(tags, 15))}</td>
         `;
         tbody.appendChild(row);
         
@@ -265,8 +291,12 @@ function renderTable(data) {
             card.className = 'coin-card';
             card.innerHTML = `
                 <div class="coin-card-header">
-                    <div class="coin-card-name">${orElse(r.coin_name, '-')}</div>
+                    <div class="coin-card-name">${escapeHtml(coinName)}</div>
                     <div class="coin-card-price">${(r.price != null && !isNaN(r.price)) ? ('$' + Number(r.price).toFixed(6)) : '-'}</div>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">上市日期</span>
+                    <span class="coin-card-value">${escapeHtml(listingDate || '-')}</span>
                 </div>
                 <div class="coin-card-row">
                     <span class="coin-card-label">24h变化</span>
@@ -347,11 +377,12 @@ function exportData() {
     }
     
     // 准备CSV数据
-    const headers = ['代币名称', '当前价格', '24h变化%', '7d变化%', '流通供应量', '流通市值', '总供应量', '总市值', '融资轮次', '投资者比例', '融资估值', '融资价格', '年化收入', '收入估值', '收入价格', '代币经济学', '锁仓', '交易所', '标签'];
+    const headers = ['代币名称', '上市日期', '当前价格', '24h变化%', '7d变化%', '流通供应量', '流通市值', '总供应量', '总市值', '融资轮次', '投资者比例', '融资估值', '融资价格', '年化收入', '收入估值', '收入价格', '代币经济学', '锁仓', '交易所', '标签'];
     const csvContent = [
         headers.join(','),
         ...data.map(row => [
             `"${(row.coin_name || '').replace(/"/g, '""')}"`,
+            row.listing_date || '',
             row.price || '',
             row.pct_24h || '',
             row.pct_7d || '',
@@ -467,7 +498,7 @@ async function loadPrices() {
         // 在表格中显示错误状态
         var tbody = document.querySelector('#token-table tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 20px; color: var(--error-color);">数据加载失败，请刷新页面</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="21" style="text-align: center; padding: 20px; color: var(--error-color);">数据加载失败，请刷新页面</td></tr>';
         }
     } finally {
         // 移除加载状态
@@ -520,5 +551,3 @@ document.addEventListener('DOMContentLoaded', function() {
 setInterval(loadPrices, 5 * 60 * 1000);
 // Update clock every second
 setInterval(updateClock, 1000);
-
-
