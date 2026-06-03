@@ -44,6 +44,13 @@
         <textarea name="tags">{{ coin.tags }}</textarea><br>
         <label for="listing_date">上市日期:</label>
         <input type="date" name="listing_date" id="listing_date" value="{{ coin.listing_date or '' }}"><br>
+        <hr>
+        <h3>特殊关注手动提醒</h3>
+        <label for="alert_above_price">价格高于此值提醒 (USD):</label>
+        <input type="number" name="alert_above_price" id="alert_above_price" step="0.00000001" value="{{ coin.alert_above_price or '' }}"><br>
+        <label for="alert_below_price">价格低于此值提醒 (USD):</label>
+        <input type="number" name="alert_below_price" id="alert_below_price" step="0.00000001" value="{{ coin.alert_below_price or '' }}"><br>
+        <small>留空表示不启用；触发后会使用系统设置里的提醒冷却时间。</small><br>
         <input type="submit" value="Save Changes">
     </form>
 </body>

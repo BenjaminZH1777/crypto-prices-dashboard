@@ -62,6 +62,8 @@ class PriceAlert:
     """价格提醒类型"""
     FINANCING_PRICE = 'financing_price'
     INCOME_PRICE = 'income_price'
+    MANUAL_ABOVE_PRICE = 'manual_above_price'
+    MANUAL_BELOW_PRICE = 'manual_below_price'
 
 
 def alert_history_key(coin_id, alert_type):
@@ -197,6 +199,23 @@ def format_price(price):
     return f'${price:.6f}'
 
 
+def get_alert_type_name(alert_type):
+    names = {
+        PriceAlert.FINANCING_PRICE: '融资价格',
+        PriceAlert.INCOME_PRICE: '收入价格',
+        PriceAlert.MANUAL_ABOVE_PRICE: '手动高于价格',
+        PriceAlert.MANUAL_BELOW_PRICE: '手动低于价格',
+    }
+    return names.get(alert_type, alert_type)
+
+
+def get_alert_reason(alert):
+    alert_type_name = get_alert_type_name(alert['type'])
+    if alert['type'] in (PriceAlert.MANUAL_ABOVE_PRICE,):
+        return f"当前价格高于{alert_type_name}"
+    return f"当前价格低于{alert_type_name}"
+
+
 def create_alert_email(alerts):
     """创建价格提醒邮件内容"""
     subject = f"🚨 代币价格提醒 - {len(alerts)}个代币触发提醒"
@@ -226,14 +245,15 @@ def create_alert_email(alerts):
         <div class="container">
             <div class="header">
                 <h1>🚨 加密货币价格提醒</h1>
-                <p>检测到 {len(alerts)} 个代币价格低于目标价格</p>
+                <p>检测到 {len(alerts)} 个代币触发价格提醒</p>
                 <p>检测时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             </div>
     """
     
     for alert in alerts:
-        alert_class = 'alert-financing' if alert['type'] == PriceAlert.FINANCING_PRICE else 'alert-income'
-        alert_type_name = '融资价格' if alert['type'] == PriceAlert.FINANCING_PRICE else '收入价格'
+        alert_class = 'alert-financing' if alert['type'] in (PriceAlert.FINANCING_PRICE, PriceAlert.MANUAL_BELOW_PRICE) else 'alert-income'
+        alert_type_name = get_alert_type_name(alert['type'])
+        alert_reason = get_alert_reason(alert)
         
         html += f"""
             <div class="alert {alert_class}">
@@ -255,7 +275,7 @@ def create_alert_email(alerts):
                         </td>
                     </tr>
                 </table>
-                <p><strong>提醒原因:</strong> 当前价格低于{alert_type_name}</p>
+                <p><strong>提醒原因:</strong> {alert_reason}</p>
             </div>
         """
     
@@ -364,6 +384,34 @@ def check_prices():
                             'percentage': percentage
                         })
                         logger.info(f"触发收入价格提醒: {coin_name} 当前${current_price:.6f} < 收入${income_based_price:.6f}")
+
+                # 检查手动高于价格提醒
+                if coin.alert_above_price and current_price > coin.alert_above_price:
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.MANUAL_ABOVE_PRICE, cooldown_hours):
+                        percentage = ((current_price - coin.alert_above_price) / coin.alert_above_price) * 100
+                        alerts_to_send.append({
+                            'coin_id': coin.coin_id,
+                            'coin_name': coin_name,
+                            'current_price': current_price,
+                            'target_price': coin.alert_above_price,
+                            'type': PriceAlert.MANUAL_ABOVE_PRICE,
+                            'percentage': percentage
+                        })
+                        logger.info(f"触发手动高于价格提醒: {coin_name} 当前${current_price:.6f} > 目标${coin.alert_above_price:.6f}")
+
+                # 检查手动低于价格提醒
+                if coin.alert_below_price and current_price < coin.alert_below_price:
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.MANUAL_BELOW_PRICE, cooldown_hours):
+                        percentage = ((current_price - coin.alert_below_price) / coin.alert_below_price) * 100
+                        alerts_to_send.append({
+                            'coin_id': coin.coin_id,
+                            'coin_name': coin_name,
+                            'current_price': current_price,
+                            'target_price': coin.alert_below_price,
+                            'type': PriceAlert.MANUAL_BELOW_PRICE,
+                            'percentage': percentage
+                        })
+                        logger.info(f"触发手动低于价格提醒: {coin_name} 当前${current_price:.6f} < 目标${coin.alert_below_price:.6f}")
             
             # 发送提醒邮件
             if alerts_to_send:

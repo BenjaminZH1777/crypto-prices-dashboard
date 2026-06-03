@@ -85,6 +85,12 @@ def ensure_schema_migrations() -> None:
         if 'listing_date' not in names:
             db.session.execute(text("ALTER TABLE coin ADD COLUMN listing_date TEXT"))
             db.session.commit()
+        if 'alert_above_price' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_above_price FLOAT"))
+            db.session.commit()
+        if 'alert_below_price' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_below_price FLOAT"))
+            db.session.commit()
     except Exception:
         db.session.rollback()
         # ignore
@@ -140,6 +146,8 @@ class Coin(db.Model):
     cexs = db.Column(db.Text)
     tags = db.Column(db.Text)
     listing_date = db.Column(db.String(20))
+    alert_above_price = db.Column(db.Float)
+    alert_below_price = db.Column(db.Float)
 
 
 class SystemSettings(db.Model):
@@ -514,6 +522,8 @@ def manage():
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
         listing_date = request.form.get('listing_date', '')
+        alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
+        alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
 
         # Try to resolve friendly inputs (e.g., names/symbols) to a real CoinGecko id
         resolved_id = resolve_coingecko_id(coin_id)
@@ -540,6 +550,8 @@ def manage():
                 coin.cexs = cexs
                 coin.tags = tags
                 coin.listing_date = listing_date
+                coin.alert_above_price = alert_above_price
+                coin.alert_below_price = alert_below_price
             else:
                 coin = Coin(
                     coin_id=resolved_id,
@@ -556,7 +568,9 @@ def manage():
                     vesting=vesting,
                     cexs=cexs,
                     tags=tags,
-                    listing_date=listing_date
+                    listing_date=listing_date,
+                    alert_above_price=alert_above_price,
+                    alert_below_price=alert_below_price
                 )
                 db.session.add(coin)
             try:
@@ -596,6 +610,8 @@ def edit_coin(coin_db_id: int):
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
         listing_date = request.form.get('listing_date', '')
+        alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
+        alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
 
         resolved_id = resolve_coingecko_id(new_coin_id)
         valid_ids = get_valid_coin_ids_set()
@@ -617,6 +633,8 @@ def edit_coin(coin_db_id: int):
             coin.cexs = cexs
             coin.tags = tags
             coin.listing_date = listing_date
+            coin.alert_above_price = alert_above_price
+            coin.alert_below_price = alert_below_price
             try:
                 db.session.commit()
             except Exception as e:
@@ -680,6 +698,8 @@ def api_data():
                 'cexs': coin.cexs,
                 'tags': coin.tags,
                 'listing_date': coin.listing_date,
+                'alert_above_price': coin.alert_above_price,
+                'alert_below_price': coin.alert_below_price,
             }
             table_data.append(table_row)
         # Include cache metadata so UI can show last/next refresh
@@ -807,6 +827,8 @@ def batch_import():
                         coin.cexs = row.get('cexs', '')
                         coin.tags = row.get('tags', '')
                         coin.listing_date = row.get('listing_date', '')
+                        coin.alert_above_price = to_float(row.get('alert_above_price'))
+                        coin.alert_below_price = to_float(row.get('alert_below_price'))
                         updated_count += 1
                     else:
                         # 添加新代币
@@ -821,7 +843,9 @@ def batch_import():
                             vesting=row.get('vesting', ''),
                             cexs=row.get('cexs', ''),
                             tags=row.get('tags', ''),
-                            listing_date=row.get('listing_date', '')
+                            listing_date=row.get('listing_date', ''),
+                            alert_above_price=to_float(row.get('alert_above_price')),
+                            alert_below_price=to_float(row.get('alert_below_price'))
                         )
                         db.session.add(coin)
                         imported_count += 1
@@ -962,6 +986,14 @@ def startup_health_check():
                     app.logger.info("Database schema updated")
                 if 'listing_date' not in names:
                     db.session.execute(text("ALTER TABLE coin ADD COLUMN listing_date TEXT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'alert_above_price' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_above_price FLOAT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'alert_below_price' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_below_price FLOAT"))
                     db.session.commit()
                     app.logger.info("Database schema updated")
             except Exception as e:

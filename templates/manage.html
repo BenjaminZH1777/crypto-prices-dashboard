@@ -50,6 +50,13 @@
         <textarea name="tags" placeholder="comma separated tags"></textarea><br>
         <label for="listing_date">上市日期:</label>
         <input type="date" name="listing_date" id="listing_date"><br>
+        <hr>
+        <h3>特殊关注手动提醒</h3>
+        <label for="alert_above_price">价格高于此值提醒 (USD):</label>
+        <input type="number" name="alert_above_price" id="alert_above_price" step="0.00000001"><br>
+        <label for="alert_below_price">价格低于此值提醒 (USD):</label>
+        <input type="number" name="alert_below_price" id="alert_below_price" step="0.00000001"><br>
+        <small>留空表示不启用；触发后会使用系统设置里的提醒冷却时间。</small><br>
         <input type="submit" value="Save">
     </form>
     <h2>Current Coins</h2>
@@ -69,6 +76,8 @@
                 <th>CEXs</th>
                 <th>Tags</th>
                 <th>上市日期</th>
+                <th>高于提醒</th>
+                <th>低于提醒</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -88,6 +97,8 @@
                 <td>{{ coin.cexs }}</td>
                 <td>{{ coin.tags }}</td>
                 <td>{{ coin.listing_date or '' }}</td>
+                <td>{{ coin.alert_above_price or '' }}</td>
+                <td>{{ coin.alert_below_price or '' }}</td>
                 <td>
                     <div style="display:flex; gap:6px;">
                         <a href="/manage/edit/{{ coin.id }}" style="padding:4px 8px;border:1px solid #888;border-radius:4px;text-decoration:none;">Edit</a>

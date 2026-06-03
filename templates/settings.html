@@ -253,8 +253,14 @@
                             <td style="padding: 8px;">
                                 {% if alert.alert_type == 'financing_price' %}
                                 <span style="background: #fbb6ce; color: #97266d; padding: 2px 8px; border-radius: 3px; font-size: 12px;">融资价格</span>
-                                {% else %}
+                                {% elif alert.alert_type == 'income_price' %}
                                 <span style="background: #d6bcfa; color: #553c9a; padding: 2px 8px; border-radius: 3px; font-size: 12px;">收入价格</span>
+                                {% elif alert.alert_type == 'manual_above_price' %}
+                                <span style="background: #c6f6d5; color: #22543d; padding: 2px 8px; border-radius: 3px; font-size: 12px;">手动高于</span>
+                                {% elif alert.alert_type == 'manual_below_price' %}
+                                <span style="background: #fed7d7; color: #742a2a; padding: 2px 8px; border-radius: 3px; font-size: 12px;">手动低于</span>
+                                {% else %}
+                                <span style="background: #edf2f7; color: #2d3748; padding: 2px 8px; border-radius: 3px; font-size: 12px;">{{ alert.alert_type }}</span>
                                 {% endif %}
                             </td>
                             <td style="padding: 8px; text-align: right; font-weight: 600; color: #e53e3e;">

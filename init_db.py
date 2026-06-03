@@ -30,6 +30,8 @@ def initialize_database() -> None:
             ('cexs', 'TEXT'),
             ('tags', 'TEXT'),
             ('listing_date', 'TEXT'),
+            ('alert_above_price', 'FLOAT'),
+            ('alert_below_price', 'FLOAT'),
         ]
         for col_name, col_type in migrations:
             if col_name not in cols:
@@ -47,4 +49,3 @@ def initialize_database() -> None:
 if __name__ == "__main__":
     initialize_database()
     print("Database initialized.")
-
