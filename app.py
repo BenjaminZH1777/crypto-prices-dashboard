@@ -249,6 +249,7 @@ _market_cache = {
 
 _listing_date_cache = {
     'data': {},  # coin id -> (listing_date or None, fetched_ok, fetched_epoch)
+    'blocked_until_epoch': 0.0,
 }
 
 def _fetch_markets_via_requests(coin_ids: list[str], timeout_seconds: int = 10) -> list[dict]:
@@ -282,6 +283,17 @@ def _normalize_coingecko_date(value) -> str | None:
         return None
 
 
+def _apply_listing_date_backoff(resp) -> None:
+    if getattr(resp, 'status_code', None) != 429:
+        return
+    retry_after = resp.headers.get('Retry-After') if hasattr(resp, 'headers') else None
+    try:
+        wait_seconds = max(60, int(retry_after or 0))
+    except (TypeError, ValueError):
+        wait_seconds = 300
+    _listing_date_cache['blocked_until_epoch'] = time.time() + wait_seconds
+
+
 def _fetch_listing_date_via_requests(coin_id: str, timeout_seconds: int = 6) -> tuple[str | None, bool]:
     """Fetch CoinGecko's available launch/listing date for one coin.
 
@@ -305,6 +317,7 @@ def _fetch_listing_date_via_requests(coin_id: str, timeout_seconds: int = 6) -> 
     }
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
+        _apply_listing_date_backoff(resp)
         resp.raise_for_status()
         payload = resp.json() or {}
     except Exception:
@@ -339,6 +352,7 @@ def _fetch_first_market_chart_date(coin_id: str, timeout_seconds: int = 8) -> tu
     }
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
+        _apply_listing_date_backoff(resp)
         resp.raise_for_status()
         prices = (resp.json() or {}).get('prices') or []
         if not prices:
@@ -349,18 +363,27 @@ def _fetch_first_market_chart_date(coin_id: str, timeout_seconds: int = 8) -> tu
         return None, False
 
 
-def get_cached_listing_date(coin_id: str, cache_ttl_seconds: int = 86400) -> tuple[str | None, bool]:
-    """Return (CoinGecko listing date, fetched_ok) with a per-process cache."""
+def get_cached_listing_date(
+    coin_id: str,
+    cache_ttl_seconds: int = 86400,
+    failure_ttl_seconds: int = 300,
+    allow_fetch: bool = True,
+) -> tuple[str | None, bool, bool]:
+    """Return (CoinGecko listing date, fetched_ok, attempted_fetch)."""
     now = time.time()
     cached = _listing_date_cache['data'].get(coin_id)
     if cached:
         cached_date, cached_ok, cached_epoch = cached
-        if now - cached_epoch <= cache_ttl_seconds:
-            return cached_date, cached_ok
+        ttl = cache_ttl_seconds if cached_ok else failure_ttl_seconds
+        if now - cached_epoch <= ttl:
+            return cached_date, cached_ok, False
+
+    if not allow_fetch or now < _listing_date_cache['blocked_until_epoch']:
+        return None, False, False
 
     listing_date, fetched_ok = _fetch_listing_date_via_requests(coin_id)
     _listing_date_cache['data'][coin_id] = (listing_date, fetched_ok, now)
-    return listing_date, fetched_ok
+    return listing_date, fetched_ok, True
 
 def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
     """Return (data_dict, last_fetch_epoch, ttl) with simple in-process cache.
@@ -749,9 +772,16 @@ def api_data():
         coins = Coin.query.all()
         table_data = []
         listing_date_cache_changed = False
+        listing_date_fetches_remaining = int(os.environ.get('LISTING_DATE_FETCHES_PER_REQUEST', '1'))
         for coin in coins:
             market = data_dict.get(coin.coin_id)
-            listing_date, listing_date_fetched = get_cached_listing_date(coin.coin_id)
+            allow_listing_date_fetch = not coin.listing_date and listing_date_fetches_remaining > 0
+            listing_date, listing_date_fetched, listing_date_attempted = get_cached_listing_date(
+                coin.coin_id,
+                allow_fetch=allow_listing_date_fetch,
+            )
+            if listing_date_attempted:
+                listing_date_fetches_remaining -= 1
             if not listing_date_fetched:
                 listing_date = coin.listing_date
             if listing_date_fetched and coin.listing_date != listing_date:
