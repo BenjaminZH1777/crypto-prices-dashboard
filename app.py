@@ -283,6 +283,19 @@ def _normalize_coingecko_date(value) -> str | None:
         return None
 
 
+def _market_listing_date_fallback(market: dict | None) -> str | None:
+    if not market:
+        return None
+    candidates = [
+        _normalize_coingecko_date(market.get('ath_date')),
+        _normalize_coingecko_date(market.get('atl_date')),
+    ]
+    candidates = [d for d in candidates if d]
+    if not candidates:
+        return None
+    return min(candidates)
+
+
 def _apply_listing_date_backoff(resp) -> None:
     if getattr(resp, 'status_code', None) != 429:
         return
@@ -783,7 +796,7 @@ def api_data():
             if listing_date_attempted:
                 listing_date_fetches_remaining -= 1
             if not listing_date_fetched:
-                listing_date = coin.listing_date
+                listing_date = coin.listing_date or _market_listing_date_fallback(market)
             if listing_date_fetched and coin.listing_date != listing_date:
                 coin.listing_date = listing_date
                 listing_date_cache_changed = True
