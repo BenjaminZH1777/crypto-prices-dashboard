@@ -286,7 +286,8 @@ def _fetch_listing_date_via_requests(coin_id: str, timeout_seconds: int = 6) -> 
     """Fetch CoinGecko's available launch/listing date for one coin.
 
     CoinGecko exposes `genesis_date` on the coin detail endpoint. For coins
-    where that is absent, try ICO dates if present. Returns (date, fetched_ok).
+    where that is absent, try ICO dates, then the first market-chart price date
+    as a practical CoinGecko listing/first-tracked date. Returns (date, fetched_ok).
     """
     if not coin_id:
         return None, False
@@ -315,7 +316,37 @@ def _fetch_listing_date_via_requests(coin_id: str, timeout_seconds: int = 6) -> 
         listing_date = _normalize_coingecko_date(ico_data.get('public_sale_start_date'))
     if not listing_date:
         listing_date = _normalize_coingecko_date(ico_data.get('ico_start_date'))
+    if not listing_date:
+        chart_date, chart_ok = _fetch_first_market_chart_date(coin_id, timeout_seconds=timeout_seconds)
+        if chart_date:
+            listing_date = chart_date
+        elif not chart_ok:
+            return None, False
     return listing_date, True
+
+
+def _fetch_first_market_chart_date(coin_id: str, timeout_seconds: int = 8) -> tuple[str | None, bool]:
+    if not coin_id:
+        return None, False
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    params = {
+        'vs_currency': 'usd',
+        'days': 'max',
+        'interval': 'daily',
+    }
+    headers = {
+        'User-Agent': 'crypto-prices-dashboard/1.0 (+https://github.com/BenjaminZH1777/crypto-prices-dashboard)'
+    }
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
+        resp.raise_for_status()
+        prices = (resp.json() or {}).get('prices') or []
+        if not prices:
+            return None, True
+        first_ts_ms = prices[0][0]
+        return datetime.utcfromtimestamp(first_ts_ms / 1000).strftime("%Y-%m-%d"), True
+    except Exception:
+        return None, False
 
 
 def get_cached_listing_date(coin_id: str, cache_ttl_seconds: int = 86400) -> tuple[str | None, bool]:
