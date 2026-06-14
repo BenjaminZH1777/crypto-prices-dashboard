@@ -13,6 +13,7 @@ import requests
 import logging
 import traceback
 from urllib.parse import urlsplit
+from datetime import datetime
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -246,6 +247,10 @@ _market_cache = {
     'ids_key': '',
 }
 
+_listing_date_cache = {
+    'data': {},  # coin id -> (listing_date or None, fetched_ok, fetched_epoch)
+}
+
 def _fetch_markets_via_requests(coin_ids: list[str], timeout_seconds: int = 10) -> list[dict]:
     if not coin_ids:
         return []
@@ -261,6 +266,70 @@ def _fetch_markets_via_requests(coin_ids: list[str], timeout_seconds: int = 10) 
     resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
     resp.raise_for_status()
     return resp.json() or []
+
+
+def _normalize_coingecko_date(value) -> str | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    candidate = text[:10]
+    try:
+        datetime.strptime(candidate, "%Y-%m-%d")
+        return candidate
+    except ValueError:
+        return None
+
+
+def _fetch_listing_date_via_requests(coin_id: str, timeout_seconds: int = 6) -> tuple[str | None, bool]:
+    """Fetch CoinGecko's available launch/listing date for one coin.
+
+    CoinGecko exposes `genesis_date` on the coin detail endpoint. For coins
+    where that is absent, try ICO dates if present. Returns (date, fetched_ok).
+    """
+    if not coin_id:
+        return None, False
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+    params = {
+        'localization': 'false',
+        'tickers': 'false',
+        'market_data': 'false',
+        'community_data': 'false',
+        'developer_data': 'false',
+        'sparkline': 'false',
+    }
+    headers = {
+        'User-Agent': 'crypto-prices-dashboard/1.0 (+https://github.com/BenjaminZH1777/crypto-prices-dashboard)'
+    }
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=timeout_seconds)
+        resp.raise_for_status()
+        payload = resp.json() or {}
+    except Exception:
+        return None, False
+
+    listing_date = _normalize_coingecko_date(payload.get('genesis_date'))
+    ico_data = payload.get('ico_data') or {}
+    if not listing_date:
+        listing_date = _normalize_coingecko_date(ico_data.get('public_sale_start_date'))
+    if not listing_date:
+        listing_date = _normalize_coingecko_date(ico_data.get('ico_start_date'))
+    return listing_date, True
+
+
+def get_cached_listing_date(coin_id: str, cache_ttl_seconds: int = 86400) -> tuple[str | None, bool]:
+    """Return (CoinGecko listing date, fetched_ok) with a per-process cache."""
+    now = time.time()
+    cached = _listing_date_cache['data'].get(coin_id)
+    if cached:
+        cached_date, cached_ok, cached_epoch = cached
+        if now - cached_epoch <= cache_ttl_seconds:
+            return cached_date, cached_ok
+
+    listing_date, fetched_ok = _fetch_listing_date_via_requests(coin_id)
+    _listing_date_cache['data'][coin_id] = (listing_date, fetched_ok, now)
+    return listing_date, fetched_ok
 
 def get_cached_market_data(ttl_seconds: int = 300) -> tuple[dict, float, int]:
     """Return (data_dict, last_fetch_epoch, ttl) with simple in-process cache.
@@ -521,7 +590,6 @@ def manage():
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
-        listing_date = request.form.get('listing_date', '')
         alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
         alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
 
@@ -549,7 +617,6 @@ def manage():
                 coin.vesting = vesting
                 coin.cexs = cexs
                 coin.tags = tags
-                coin.listing_date = listing_date
                 coin.alert_above_price = alert_above_price
                 coin.alert_below_price = alert_below_price
             else:
@@ -568,7 +635,6 @@ def manage():
                     vesting=vesting,
                     cexs=cexs,
                     tags=tags,
-                    listing_date=listing_date,
                     alert_above_price=alert_above_price,
                     alert_below_price=alert_below_price
                 )
@@ -609,7 +675,6 @@ def edit_coin(coin_db_id: int):
         vesting = request.form.get('vesting', '')
         cexs = request.form.get('cexs', '')
         tags = request.form.get('tags', '')
-        listing_date = request.form.get('listing_date', '')
         alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
         alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
 
@@ -632,7 +697,6 @@ def edit_coin(coin_db_id: int):
             coin.vesting = vesting
             coin.cexs = cexs
             coin.tags = tags
-            coin.listing_date = listing_date
             coin.alert_above_price = alert_above_price
             coin.alert_below_price = alert_below_price
             try:
@@ -653,8 +717,15 @@ def api_data():
         data_dict, last_epoch, ttl = get_cached_market_data(ttl_seconds=300)
         coins = Coin.query.all()
         table_data = []
+        listing_date_cache_changed = False
         for coin in coins:
             market = data_dict.get(coin.coin_id)
+            listing_date, listing_date_fetched = get_cached_listing_date(coin.coin_id)
+            if not listing_date_fetched:
+                listing_date = coin.listing_date
+            if listing_date_fetched and coin.listing_date != listing_date:
+                coin.listing_date = listing_date
+                listing_date_cache_changed = True
             # Compute financing_based_price if inputs available
             computed_fbp = None
             computed_ibp = None
@@ -697,11 +768,16 @@ def api_data():
                 'vesting': coin.vesting,
                 'cexs': coin.cexs,
                 'tags': coin.tags,
-                'listing_date': coin.listing_date,
+                'listing_date': listing_date,
                 'alert_above_price': coin.alert_above_price,
                 'alert_below_price': coin.alert_below_price,
             }
             table_data.append(table_row)
+        if listing_date_cache_changed:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         # Include cache metadata so UI can show last/next refresh
         response = {
             'rows': table_data,
@@ -826,7 +902,6 @@ def batch_import():
                         coin.vesting = row.get('vesting', '')
                         coin.cexs = row.get('cexs', '')
                         coin.tags = row.get('tags', '')
-                        coin.listing_date = row.get('listing_date', '')
                         coin.alert_above_price = to_float(row.get('alert_above_price'))
                         coin.alert_below_price = to_float(row.get('alert_below_price'))
                         updated_count += 1
@@ -843,7 +918,6 @@ def batch_import():
                             vesting=row.get('vesting', ''),
                             cexs=row.get('cexs', ''),
                             tags=row.get('tags', ''),
-                            listing_date=row.get('listing_date', ''),
                             alert_above_price=to_float(row.get('alert_above_price')),
                             alert_below_price=to_float(row.get('alert_below_price'))
                         )

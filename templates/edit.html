@@ -42,8 +42,7 @@
         <textarea name="cexs">{{ coin.cexs }}</textarea><br>
         <label for="tags">Tags:</label>
         <textarea name="tags">{{ coin.tags }}</textarea><br>
-        <label for="listing_date">上市日期:</label>
-        <input type="date" name="listing_date" id="listing_date" value="{{ coin.listing_date or '' }}"><br>
+        <p>上市日期：{{ coin.listing_date or '将从 CoinGecko 自动识别' }}</p>
         <hr>
         <h3>特殊关注手动提醒</h3>
         <label for="alert_above_price">价格高于此值提醒 (USD):</label>

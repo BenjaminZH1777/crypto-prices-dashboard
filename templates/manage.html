@@ -48,8 +48,7 @@
         <textarea name="cexs"></textarea><br>
         <label for="tags">Tags:</label>
         <textarea name="tags" placeholder="comma separated tags"></textarea><br>
-        <label for="listing_date">上市日期:</label>
-        <input type="date" name="listing_date" id="listing_date"><br>
+        <small>上市日期会从 CoinGecko 自动识别并显示，无需手动填写。</small><br>
         <hr>
         <h3>特殊关注手动提醒</h3>
         <label for="alert_above_price">价格高于此值提醒 (USD):</label>
@@ -96,7 +95,7 @@
                 <td>{{ coin.vesting }}</td>
                 <td>{{ coin.cexs }}</td>
                 <td>{{ coin.tags }}</td>
-                <td>{{ coin.listing_date or '' }}</td>
+                <td>{{ coin.listing_date or '自动识别中' }}</td>
                 <td>{{ coin.alert_above_price or '' }}</td>
                 <td>{{ coin.alert_below_price or '' }}</td>
                 <td>
