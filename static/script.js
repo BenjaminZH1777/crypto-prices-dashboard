@@ -180,7 +180,7 @@ function renderTable(data) {
     }
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="23" style="text-align: center; padding: 20px; color: var(--text-muted);">没有找到匹配的数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="25" style="text-align: center; padding: 20px; color: var(--text-muted);">没有找到匹配的数据</td></tr>';
         if (mobileCards) {
             mobileCards.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">没有找到匹配的数据</div>';
         }
@@ -248,8 +248,13 @@ function renderTable(data) {
         var listingDate = orElse(r.listing_date, '');
         var alertAboveVal = (r.alert_above_price != null && !isNaN(r.alert_above_price)) ? Number(r.alert_above_price) : null;
         var alertBelowVal = (r.alert_below_price != null && !isNaN(r.alert_below_price)) ? Number(r.alert_below_price) : null;
+        var alertGainPctVal = (r.alert_gain_pct_24h != null && !isNaN(r.alert_gain_pct_24h)) ? Number(r.alert_gain_pct_24h) : null;
+        var alertLossPctVal = (r.alert_loss_pct_24h != null && !isNaN(r.alert_loss_pct_24h)) ? Number(r.alert_loss_pct_24h) : null;
+        var pct24hVal = (r.pct_24h != null && !isNaN(r.pct_24h)) ? Number(r.pct_24h) : null;
         var alertAboveStyle = (priceVal != null && alertAboveVal != null && priceVal > alertAboveVal) ? 'color:var(--success-color);font-weight:bold;' : '';
         var alertBelowStyle = (priceVal != null && alertBelowVal != null && priceVal < alertBelowVal) ? 'color:var(--error-color);font-weight:bold;' : '';
+        var alertGainStyle = (pct24hVal != null && alertGainPctVal != null && pct24hVal >= Math.abs(alertGainPctVal)) ? 'color:var(--success-color);font-weight:bold;' : '';
+        var alertLossStyle = (pct24hVal != null && alertLossPctVal != null && pct24hVal <= -Math.abs(alertLossPctVal)) ? 'color:var(--error-color);font-weight:bold;' : '';
         
         row.innerHTML = `
             <td class="important-col">${idx + 1}</td>
@@ -266,6 +271,8 @@ function renderTable(data) {
             </td>
             <td class="price-col" style="${alertAboveStyle}">${fmtMoney(r.alert_above_price)}</td>
             <td class="price-col" style="${alertBelowStyle}">${fmtMoney(r.alert_below_price)}</td>
+            <td style="${alertGainStyle}">${fmtPercent(r.alert_gain_pct_24h)}</td>
+            <td style="${alertLossStyle}">${fmtPercent(r.alert_loss_pct_24h)}</td>
             <td>${fmtPercent(r.pct_24h)}</td>
             <td>${fmtPercent(r.pct_7d)}</td>
             <td title="${escapeAttr(orElse(r.current_supply, '-'))}">${fmtNumber(r.current_supply)}</td>
@@ -311,6 +318,14 @@ function renderTable(data) {
                 <div class="coin-card-row">
                     <span class="coin-card-label">低于提醒</span>
                     <span class="coin-card-value" style="${alertBelowStyle}">${fmtMoney(r.alert_below_price)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">涨幅提醒</span>
+                    <span class="coin-card-value" style="${alertGainStyle}">${fmtPercent(r.alert_gain_pct_24h)}</span>
+                </div>
+                <div class="coin-card-row">
+                    <span class="coin-card-label">跌幅提醒</span>
+                    <span class="coin-card-value" style="${alertLossStyle}">${fmtPercent(r.alert_loss_pct_24h)}</span>
                 </div>
                 <div class="coin-card-row">
                     <span class="coin-card-label">24h变化</span>
@@ -391,7 +406,7 @@ function exportData() {
     }
     
     // 准备CSV数据
-    const headers = ['代币名称', '上市日期', '当前价格', '高于提醒', '低于提醒', '24h变化%', '7d变化%', '流通供应量', '流通市值', '总供应量', '总市值', '融资轮次', '投资者比例', '融资估值', '融资价格', '年化收入', '收入估值', '收入价格', '代币经济学', '锁仓', '交易所', '标签'];
+    const headers = ['代币名称', '上市日期', '当前价格', '高于提醒', '低于提醒', '涨幅提醒%', '跌幅提醒%', '24h变化%', '7d变化%', '流通供应量', '流通市值', '总供应量', '总市值', '融资轮次', '投资者比例', '融资估值', '融资价格', '年化收入', '收入估值', '收入价格', '代币经济学', '锁仓', '交易所', '标签'];
     const csvContent = [
         headers.join(','),
         ...data.map(row => [
@@ -400,6 +415,8 @@ function exportData() {
             row.price || '',
             row.alert_above_price || '',
             row.alert_below_price || '',
+            row.alert_gain_pct_24h || '',
+            row.alert_loss_pct_24h || '',
             row.pct_24h || '',
             row.pct_7d || '',
             row.current_supply || '',
@@ -514,7 +531,7 @@ async function loadPrices() {
         // 在表格中显示错误状态
         var tbody = document.querySelector('#token-table tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="23" style="text-align: center; padding: 20px; color: var(--error-color);">数据加载失败，请刷新页面</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="25" style="text-align: center; padding: 20px; color: var(--error-color);">数据加载失败，请刷新页面</td></tr>';
         }
     } finally {
         // 移除加载状态

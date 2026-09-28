@@ -92,6 +92,18 @@ def ensure_schema_migrations() -> None:
         if 'alert_below_price' not in names:
             db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_below_price FLOAT"))
             db.session.commit()
+        if 'financing_alert_enabled' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN financing_alert_enabled BOOLEAN DEFAULT 1"))
+            db.session.commit()
+        if 'income_alert_enabled' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN income_alert_enabled BOOLEAN DEFAULT 1"))
+            db.session.commit()
+        if 'alert_gain_pct_24h' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_gain_pct_24h FLOAT"))
+            db.session.commit()
+        if 'alert_loss_pct_24h' not in names:
+            db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_loss_pct_24h FLOAT"))
+            db.session.commit()
     except Exception:
         db.session.rollback()
         # ignore
@@ -149,6 +161,10 @@ class Coin(db.Model):
     listing_date = db.Column(db.String(20))
     alert_above_price = db.Column(db.Float)
     alert_below_price = db.Column(db.Float)
+    financing_alert_enabled = db.Column(db.Boolean, default=True)
+    income_alert_enabled = db.Column(db.Boolean, default=True)
+    alert_gain_pct_24h = db.Column(db.Float)
+    alert_loss_pct_24h = db.Column(db.Float)
 
 
 class SystemSettings(db.Model):
@@ -488,6 +504,10 @@ def parse_optional_float(value):
         return None
 
 
+def form_checkbox_enabled(name: str) -> bool:
+    return request.form.get(name) in ('1', 'true', 'on', 'yes')
+
+
 def _is_safe_redirect_target(target: str) -> bool:
     if not target:
         return False
@@ -659,6 +679,10 @@ def manage():
         tags = request.form.get('tags', '')
         alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
         alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
+        financing_alert_enabled = form_checkbox_enabled('financing_alert_enabled')
+        income_alert_enabled = form_checkbox_enabled('income_alert_enabled')
+        alert_gain_pct_24h = parse_optional_float(request.form.get('alert_gain_pct_24h'))
+        alert_loss_pct_24h = parse_optional_float(request.form.get('alert_loss_pct_24h'))
 
         # Try to resolve friendly inputs (e.g., names/symbols) to a real CoinGecko id
         resolved_id = resolve_coingecko_id(coin_id)
@@ -686,6 +710,10 @@ def manage():
                 coin.tags = tags
                 coin.alert_above_price = alert_above_price
                 coin.alert_below_price = alert_below_price
+                coin.financing_alert_enabled = financing_alert_enabled
+                coin.income_alert_enabled = income_alert_enabled
+                coin.alert_gain_pct_24h = alert_gain_pct_24h
+                coin.alert_loss_pct_24h = alert_loss_pct_24h
             else:
                 coin = Coin(
                     coin_id=resolved_id,
@@ -703,7 +731,11 @@ def manage():
                     cexs=cexs,
                     tags=tags,
                     alert_above_price=alert_above_price,
-                    alert_below_price=alert_below_price
+                    alert_below_price=alert_below_price,
+                    financing_alert_enabled=financing_alert_enabled,
+                    income_alert_enabled=income_alert_enabled,
+                    alert_gain_pct_24h=alert_gain_pct_24h,
+                    alert_loss_pct_24h=alert_loss_pct_24h
                 )
                 db.session.add(coin)
             try:
@@ -744,6 +776,10 @@ def edit_coin(coin_db_id: int):
         tags = request.form.get('tags', '')
         alert_above_price = parse_optional_float(request.form.get('alert_above_price'))
         alert_below_price = parse_optional_float(request.form.get('alert_below_price'))
+        financing_alert_enabled = form_checkbox_enabled('financing_alert_enabled')
+        income_alert_enabled = form_checkbox_enabled('income_alert_enabled')
+        alert_gain_pct_24h = parse_optional_float(request.form.get('alert_gain_pct_24h'))
+        alert_loss_pct_24h = parse_optional_float(request.form.get('alert_loss_pct_24h'))
 
         resolved_id = resolve_coingecko_id(new_coin_id)
         valid_ids = get_valid_coin_ids_set()
@@ -766,6 +802,10 @@ def edit_coin(coin_db_id: int):
             coin.tags = tags
             coin.alert_above_price = alert_above_price
             coin.alert_below_price = alert_below_price
+            coin.financing_alert_enabled = financing_alert_enabled
+            coin.income_alert_enabled = income_alert_enabled
+            coin.alert_gain_pct_24h = alert_gain_pct_24h
+            coin.alert_loss_pct_24h = alert_loss_pct_24h
             try:
                 db.session.commit()
             except Exception as e:
@@ -845,6 +885,10 @@ def api_data():
                 'listing_date': listing_date,
                 'alert_above_price': coin.alert_above_price,
                 'alert_below_price': coin.alert_below_price,
+                'financing_alert_enabled': True if coin.financing_alert_enabled is None else bool(coin.financing_alert_enabled),
+                'income_alert_enabled': True if coin.income_alert_enabled is None else bool(coin.income_alert_enabled),
+                'alert_gain_pct_24h': coin.alert_gain_pct_24h,
+                'alert_loss_pct_24h': coin.alert_loss_pct_24h,
             }
             table_data.append(table_row)
         if listing_date_cache_changed:
@@ -961,6 +1005,14 @@ def batch_import():
                     # 解析数值字段
                     def to_float(v):
                         return parse_optional_float(v.strip() if isinstance(v, str) else v)
+
+                    def to_bool(v, default=True):
+                        if v is None:
+                            return default
+                        text = str(v).strip().lower()
+                        if not text:
+                            return default
+                        return text not in ('0', 'false', 'no', 'off')
                     
                     # 检查代币是否已存在
                     coin = Coin.query.filter_by(coin_id=coin_id).first()
@@ -978,6 +1030,10 @@ def batch_import():
                         coin.tags = row.get('tags', '')
                         coin.alert_above_price = to_float(row.get('alert_above_price'))
                         coin.alert_below_price = to_float(row.get('alert_below_price'))
+                        coin.financing_alert_enabled = to_bool(row.get('financing_alert_enabled'), default=True)
+                        coin.income_alert_enabled = to_bool(row.get('income_alert_enabled'), default=True)
+                        coin.alert_gain_pct_24h = to_float(row.get('alert_gain_pct_24h'))
+                        coin.alert_loss_pct_24h = to_float(row.get('alert_loss_pct_24h'))
                         updated_count += 1
                     else:
                         # 添加新代币
@@ -993,7 +1049,11 @@ def batch_import():
                             cexs=row.get('cexs', ''),
                             tags=row.get('tags', ''),
                             alert_above_price=to_float(row.get('alert_above_price')),
-                            alert_below_price=to_float(row.get('alert_below_price'))
+                            alert_below_price=to_float(row.get('alert_below_price')),
+                            financing_alert_enabled=to_bool(row.get('financing_alert_enabled'), default=True),
+                            income_alert_enabled=to_bool(row.get('income_alert_enabled'), default=True),
+                            alert_gain_pct_24h=to_float(row.get('alert_gain_pct_24h')),
+                            alert_loss_pct_24h=to_float(row.get('alert_loss_pct_24h'))
                         )
                         db.session.add(coin)
                         imported_count += 1
@@ -1142,6 +1202,22 @@ def startup_health_check():
                     app.logger.info("Database schema updated")
                 if 'alert_below_price' not in names:
                     db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_below_price FLOAT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'financing_alert_enabled' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN financing_alert_enabled BOOLEAN DEFAULT 1"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'income_alert_enabled' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN income_alert_enabled BOOLEAN DEFAULT 1"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'alert_gain_pct_24h' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_gain_pct_24h FLOAT"))
+                    db.session.commit()
+                    app.logger.info("Database schema updated")
+                if 'alert_loss_pct_24h' not in names:
+                    db.session.execute(text("ALTER TABLE coin ADD COLUMN alert_loss_pct_24h FLOAT"))
                     db.session.commit()
                     app.logger.info("Database schema updated")
             except Exception as e:

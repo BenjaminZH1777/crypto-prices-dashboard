@@ -45,10 +45,22 @@
         <p>上市日期：{{ coin.listing_date or '将从 CoinGecko 自动识别' }}</p>
         <hr>
         <h3>特殊关注手动提醒</h3>
+        <label>
+            <input type="checkbox" name="financing_alert_enabled" value="1" {% if coin.financing_alert_enabled is not false %}checked{% endif %}>
+            启用融资价低于提醒
+        </label><br>
+        <label>
+            <input type="checkbox" name="income_alert_enabled" value="1" {% if coin.income_alert_enabled is not false %}checked{% endif %}>
+            启用收入价低于提醒
+        </label><br>
         <label for="alert_above_price">价格高于此值提醒 (USD):</label>
         <input type="number" name="alert_above_price" id="alert_above_price" step="0.00000001" value="{{ coin.alert_above_price or '' }}"><br>
         <label for="alert_below_price">价格低于此值提醒 (USD):</label>
         <input type="number" name="alert_below_price" id="alert_below_price" step="0.00000001" value="{{ coin.alert_below_price or '' }}"><br>
+        <label for="alert_gain_pct_24h">24h涨幅达到此百分比提醒:</label>
+        <input type="number" name="alert_gain_pct_24h" id="alert_gain_pct_24h" step="0.01" min="0" value="{{ coin.alert_gain_pct_24h or '' }}"><br>
+        <label for="alert_loss_pct_24h">24h跌幅达到此百分比提醒:</label>
+        <input type="number" name="alert_loss_pct_24h" id="alert_loss_pct_24h" step="0.01" min="0" value="{{ coin.alert_loss_pct_24h or '' }}"><br>
         <small>留空表示不启用；触发后会使用系统设置里的提醒冷却时间。</small><br>
         <input type="submit" value="Save Changes">
     </form>

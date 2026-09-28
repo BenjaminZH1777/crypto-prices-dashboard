@@ -103,13 +103,13 @@
             <h3>📋 CSV格式说明</h3>
             <p>请按以下格式准备CSV数据，第一行为表头（必须）：</p>
             <code>
-coin_id,found_raises,investor_percentage,financing_valuation,annualized_income,income_valuation,tokenomics,vesting,cexs,tags,alert_above_price,alert_below_price
+coin_id,found_raises,investor_percentage,financing_valuation,annualized_income,income_valuation,tokenomics,vesting,cexs,tags,alert_above_price,alert_below_price,financing_alert_enabled,income_alert_enabled,alert_gain_pct_24h,alert_loss_pct_24h
             </code>
             <br><br>
             <p><strong>示例：</strong></p>
             <code>
-bitcoin,0,0,0,0,0,"BTC tokenomics","No vesting","Binance,OKX","BTC,Layer1",120000,90000<br>
-ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1",5000,3500
+bitcoin,0,0,0,0,0,"BTC tokenomics","No vesting","Binance,OKX","BTC,Layer1",120000,90000,1,1,20,15<br>
+ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1",5000,3500,1,0,12,8
             </code>
             <br><br>
             <p><strong>字段说明：</strong></p>
@@ -127,6 +127,10 @@ ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1",5000
                 <li><code>上市日期</code>: 不需要导入，系统会从 CoinGecko 自动识别</li>
                 <li><code>alert_above_price</code>: 当前价格高于该值时提醒，留空不启用</li>
                 <li><code>alert_below_price</code>: 当前价格低于该值时提醒，留空不启用</li>
+                <li><code>financing_alert_enabled</code>: 融资价提醒开关，1开启/0关闭，默认开启</li>
+                <li><code>income_alert_enabled</code>: 收入价提醒开关，1开启/0关闭，默认开启</li>
+                <li><code>alert_gain_pct_24h</code>: 24h涨幅达到该百分比时提醒，留空不启用</li>
+                <li><code>alert_loss_pct_24h</code>: 24h跌幅达到该百分比时提醒，留空不启用</li>
             </ul>
         </div>
 
@@ -135,7 +139,7 @@ ethereum,0,0,0,0,0,"ETH tokenomics","No vesting","Binance,OKX","ETH,Layer1",5000
             
             <label for="csv_data"><strong>粘贴CSV数据：</strong></label>
             <textarea name="csv_data" id="csv_data" placeholder="coin_id,found_raises,investor_percentage,...
-bitcoin,0,0,0,0,0,&quot;BTC tokenomics&quot;,&quot;No vesting&quot;,&quot;Binance&quot;,&quot;BTC,Layer1&quot;,120000,90000"></textarea>
+bitcoin,0,0,0,0,0,&quot;BTC tokenomics&quot;,&quot;No vesting&quot;,&quot;Binance&quot;,&quot;BTC,Layer1&quot;,120000,90000,1,1,20,15"></textarea>
             
             <div style="margin-top: 15px;">
                 <button type="submit" class="btn">📥 导入数据</button>

@@ -32,6 +32,10 @@ def initialize_database() -> None:
             ('listing_date', 'TEXT'),
             ('alert_above_price', 'FLOAT'),
             ('alert_below_price', 'FLOAT'),
+            ('financing_alert_enabled', 'BOOLEAN DEFAULT 1'),
+            ('income_alert_enabled', 'BOOLEAN DEFAULT 1'),
+            ('alert_gain_pct_24h', 'FLOAT'),
+            ('alert_loss_pct_24h', 'FLOAT'),
         ]
         for col_name, col_type in migrations:
             if col_name not in cols:

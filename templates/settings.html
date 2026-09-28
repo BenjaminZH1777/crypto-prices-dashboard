@@ -259,15 +259,27 @@
                                 <span style="background: #c6f6d5; color: #22543d; padding: 2px 8px; border-radius: 3px; font-size: 12px;">手动高于</span>
                                 {% elif alert.alert_type == 'manual_below_price' %}
                                 <span style="background: #fed7d7; color: #742a2a; padding: 2px 8px; border-radius: 3px; font-size: 12px;">手动低于</span>
+                                {% elif alert.alert_type == 'daily_gain_pct' %}
+                                <span style="background: #c6f6d5; color: #22543d; padding: 2px 8px; border-radius: 3px; font-size: 12px;">24h涨幅</span>
+                                {% elif alert.alert_type == 'daily_loss_pct' %}
+                                <span style="background: #fed7d7; color: #742a2a; padding: 2px 8px; border-radius: 3px; font-size: 12px;">24h跌幅</span>
                                 {% else %}
                                 <span style="background: #edf2f7; color: #2d3748; padding: 2px 8px; border-radius: 3px; font-size: 12px;">{{ alert.alert_type }}</span>
                                 {% endif %}
                             </td>
                             <td style="padding: 8px; text-align: right; font-weight: 600; color: #e53e3e;">
+                                {% if alert.alert_type in ['daily_gain_pct', 'daily_loss_pct'] %}
+                                {{ "%.2f" | format(alert.current_price) if alert.current_price is not none else 'N/A' }}%
+                                {% else %}
                                 ${{ "%.6f" | format(alert.current_price) if alert.current_price else 'N/A' }}
+                                {% endif %}
                             </td>
                             <td style="padding: 8px; text-align: right;">
+                                {% if alert.alert_type in ['daily_gain_pct', 'daily_loss_pct'] %}
+                                {{ "%.2f" | format(alert.target_price) if alert.target_price is not none else 'N/A' }}%
+                                {% else %}
                                 ${{ "%.6f" | format(alert.target_price) if alert.target_price else 'N/A' }}
+                                {% endif %}
                             </td>
                             <td style="padding: 8px; text-align: right; color: {% if alert.price_diff_pct < 0 %}#e53e3e{% else %}#666{% endif %};">
                                 {{ "%.2f" | format(alert.price_diff_pct) if alert.price_diff_pct else 'N/A' }}%

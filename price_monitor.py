@@ -64,6 +64,8 @@ class PriceAlert:
     INCOME_PRICE = 'income_price'
     MANUAL_ABOVE_PRICE = 'manual_above_price'
     MANUAL_BELOW_PRICE = 'manual_below_price'
+    DAILY_GAIN_PCT = 'daily_gain_pct'
+    DAILY_LOSS_PCT = 'daily_loss_pct'
 
 
 def alert_history_key(coin_id, alert_type):
@@ -205,15 +207,27 @@ def get_alert_type_name(alert_type):
         PriceAlert.INCOME_PRICE: '收入价格',
         PriceAlert.MANUAL_ABOVE_PRICE: '手动高于价格',
         PriceAlert.MANUAL_BELOW_PRICE: '手动低于价格',
+        PriceAlert.DAILY_GAIN_PCT: '24h涨幅',
+        PriceAlert.DAILY_LOSS_PCT: '24h跌幅',
     }
     return names.get(alert_type, alert_type)
 
 
 def get_alert_reason(alert):
     alert_type_name = get_alert_type_name(alert['type'])
-    if alert['type'] in (PriceAlert.MANUAL_ABOVE_PRICE,):
+    if alert['type'] == PriceAlert.DAILY_GAIN_PCT:
+        return f"当前24h涨幅达到{format_threshold_pct(alert['target_price'])}"
+    if alert['type'] == PriceAlert.MANUAL_ABOVE_PRICE:
         return f"当前价格高于{alert_type_name}"
+    if alert['type'] == PriceAlert.DAILY_LOSS_PCT:
+        return f"当前24h跌幅达到{format_threshold_pct(alert['target_price'])}"
     return f"当前价格低于{alert_type_name}"
+
+
+def format_threshold_pct(value):
+    if value is None:
+        return 'N/A'
+    return f"{abs(value):.2f}%"
 
 
 def create_alert_email(alerts):
@@ -251,9 +265,14 @@ def create_alert_email(alerts):
     """
     
     for alert in alerts:
-        alert_class = 'alert-financing' if alert['type'] in (PriceAlert.FINANCING_PRICE, PriceAlert.MANUAL_BELOW_PRICE) else 'alert-income'
+        alert_class = 'alert-financing' if alert['type'] in (PriceAlert.FINANCING_PRICE, PriceAlert.MANUAL_BELOW_PRICE, PriceAlert.DAILY_LOSS_PCT) else 'alert-income'
         alert_type_name = get_alert_type_name(alert['type'])
         alert_reason = get_alert_reason(alert)
+        is_pct_alert = alert['type'] in (PriceAlert.DAILY_GAIN_PCT, PriceAlert.DAILY_LOSS_PCT)
+        alert_diff = alert.get('price_diff', alert['current_price'] - alert['target_price'])
+        current_display = f"{alert['current_price']:.2f}%" if is_pct_alert else format_price(alert['current_price'])
+        target_display = format_threshold_pct(alert['target_price']) if is_pct_alert else format_price(alert['target_price'])
+        diff_display = f"{alert_diff:.2f}%" if is_pct_alert else format_price(alert_diff)
         
         html += f"""
             <div class="alert {alert_class}">
@@ -261,16 +280,16 @@ def create_alert_email(alerts):
                 <table>
                     <tr>
                         <td class="label">当前价格:</td>
-                        <td class="price price-current">{format_price(alert['current_price'])}</td>
+                        <td class="price price-current">{current_display}</td>
                     </tr>
                     <tr>
                         <td class="label">{alert_type_name}:</td>
-                        <td class="price price-target">{format_price(alert['target_price'])}</td>
+                        <td class="price price-target">{target_display}</td>
                     </tr>
                     <tr>
                         <td class="label">价差:</td>
                         <td class="price" style="color: #f44336;">
-                            {format_price(alert['current_price'] - alert['target_price'])} 
+                            {diff_display}
                             ({alert['percentage']:.2f}%)
                         </td>
                     </tr>
@@ -358,7 +377,10 @@ def check_prices():
                 income_based_price = computed_ibp if computed_ibp is not None else coin.income_based_price
                 
                 # 检查融资价格
-                if financing_based_price and current_price < financing_based_price:
+                financing_alert_enabled = True if coin.financing_alert_enabled is None else bool(coin.financing_alert_enabled)
+                income_alert_enabled = True if coin.income_alert_enabled is None else bool(coin.income_alert_enabled)
+
+                if financing_alert_enabled and financing_based_price and current_price < financing_based_price:
                     if should_send_alert_from_db(coin.coin_id, PriceAlert.FINANCING_PRICE, cooldown_hours):
                         percentage = ((current_price - financing_based_price) / financing_based_price) * 100
                         alerts_to_send.append({
@@ -372,7 +394,7 @@ def check_prices():
                         logger.info(f"触发融资价格提醒: {coin_name} 当前${current_price:.6f} < 融资${financing_based_price:.6f}")
                 
                 # 检查收入价格
-                if income_based_price and current_price < income_based_price:
+                if income_alert_enabled and income_based_price and current_price < income_based_price:
                     if should_send_alert_from_db(coin.coin_id, PriceAlert.INCOME_PRICE, cooldown_hours):
                         percentage = ((current_price - income_based_price) / income_based_price) * 100
                         alerts_to_send.append({
@@ -412,6 +434,41 @@ def check_prices():
                             'percentage': percentage
                         })
                         logger.info(f"触发手动低于价格提醒: {coin_name} 当前${current_price:.6f} < 目标${coin.alert_below_price:.6f}")
+
+                pct_24h = market.get('price_change_percentage_24h_in_currency', market.get('price_change_percentage_24h'))
+                if pct_24h is not None:
+                    try:
+                        pct_24h = float(pct_24h)
+                    except (TypeError, ValueError):
+                        pct_24h = None
+
+                if pct_24h is not None and coin.alert_gain_pct_24h and pct_24h >= abs(coin.alert_gain_pct_24h):
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.DAILY_GAIN_PCT, cooldown_hours):
+                        threshold = abs(coin.alert_gain_pct_24h)
+                        alerts_to_send.append({
+                            'coin_id': coin.coin_id,
+                            'coin_name': coin_name,
+                            'current_price': pct_24h,
+                            'target_price': threshold,
+                            'type': PriceAlert.DAILY_GAIN_PCT,
+                            'percentage': pct_24h,
+                            'price_diff': pct_24h - threshold,
+                        })
+                        logger.info(f"触发24h涨幅提醒: {coin_name} 当前{pct_24h:.2f}% >= 阈值{threshold:.2f}%")
+
+                if pct_24h is not None and coin.alert_loss_pct_24h and pct_24h <= -abs(coin.alert_loss_pct_24h):
+                    if should_send_alert_from_db(coin.coin_id, PriceAlert.DAILY_LOSS_PCT, cooldown_hours):
+                        threshold = abs(coin.alert_loss_pct_24h)
+                        alerts_to_send.append({
+                            'coin_id': coin.coin_id,
+                            'coin_name': coin_name,
+                            'current_price': pct_24h,
+                            'target_price': -threshold,
+                            'type': PriceAlert.DAILY_LOSS_PCT,
+                            'percentage': pct_24h,
+                            'price_diff': pct_24h + threshold,
+                        })
+                        logger.info(f"触发24h跌幅提醒: {coin_name} 当前{pct_24h:.2f}% <= 阈值-{threshold:.2f}%")
             
             # 发送提醒邮件
             if alerts_to_send:
@@ -430,7 +487,7 @@ def check_prices():
                             alert_type=alert['type'],
                             current_price=alert['current_price'],
                             target_price=alert['target_price'],
-                            price_diff=alert['current_price'] - alert['target_price'],
+                            price_diff=alert.get('price_diff', alert['current_price'] - alert['target_price']),
                             price_diff_pct=alert['percentage'],
                             triggered_at=current_time,
                             email_sent=email_sent,
